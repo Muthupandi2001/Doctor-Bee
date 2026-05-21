@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "444402775117",
+    "project_id": "doctor-bee-2d622",
+    "storage_bucket": "doctor-bee-2d622.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:444402775117:android:04b6dd502c1669001b1804",
+        "android_client_info": {
+          "package_name": "com.example.drbee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoWD1PhhfBmZSPXvizEGndJtcRf1dtu_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
