@@ -1,8 +1,6 @@
 package com.example.drbee
 
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
-
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,6 +11,19 @@ import com.example.drbee.Authentication.LoginScreen
 import com.example.drbee.Authentication.SignupScreen
 import com.example.drbee.MainScreen.MainScreen
 import com.example.drbee.OnBoarding.OnBoardingScreen
+import com.example.drbee.ProfileScreen.ThemePreferencesManager
+import com.example.drbee.ProfileScreen.ThemePreferencesManager.currentAppThemeSelection
+
+// ✅ FIX 1: Import your custom Theme wrapper and global State controller flag
+import com.example.drbee.ProfileScreen.WonderBeeTheme
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
+
+// Stub class to make your snippet compile immediately
+class AuthRepository {
+    suspend fun login(e: String, p: String): Result<Unit> = Result.success(Unit)
+}
+
 
 object Routes {
     const val GET_STARTED = "get_started"
@@ -20,39 +31,45 @@ object Routes {
     const val SIGNUP = "signup"
     const val DASHBOARD = "dashboard"
     const val MAINSCREEN = "mainscreen"
-
     const val ONBOARDING = "onBoarding"
 }
 
 @Composable
-@Preview
 fun App() {
     val navController = rememberNavController()
 
-    MaterialTheme {
+    val auth = remember { Firebase.auth }
 
+    val initialDestination = remember {
+        if (auth.currentUser != null) Routes.MAINSCREEN else Routes.GET_STARTED
+    }
+
+    LaunchedEffect(Unit) {
+        ThemePreferencesManager.loadThemeSettings { _, _, _, _ ->
+            // Cursors are not present at this root layer level, ignoring values cleanly
+        }
+    }
+
+
+    WonderBeeTheme(themeType = currentAppThemeSelection) {
         NavHost(
             navController = navController,
-            startDestination = Routes.GET_STARTED
+            startDestination = initialDestination // ✅ Automatically routes based on active token state
         ) {
-
             composable(Routes.GET_STARTED) {
                 GetStartedScreen(
                     onGetStarted = {
-                        navController.navigate(Routes.LOGIN) {
-                            popUpTo(Routes.GET_STARTED) { inclusive = true }
-                        }
+                        // Keep the history stack so hitting back on Login doesn't close the app
+                        navController.navigate(Routes.LOGIN)
                     }
                 )
             }
 
             composable(Routes.LOGIN) {
                 LoginScreen(
+                    navController = navController, // Pass navController inside to execute back action
                     onLoginSuccess = {
-                        navController.navigate(Routes.ONBOARDING) {
-//                            popUpTo(Routes.MAINSCREEN) {
-//                                inclusive = true }
-                        }
+                        navController.navigate(Routes.ONBOARDING)
                     },
                     onNavigateToSignup = {
                         navController.navigate(Routes.SIGNUP)
@@ -66,32 +83,17 @@ fun App() {
                         navController.navigate(Routes.DASHBOARD) {
                             popUpTo(Routes.SIGNUP) { inclusive = true }
                         }
-                    },
-
-                    )
+                    }
+                )
             }
 
             composable(Routes.DASHBOARD) {
-                DashboardScreen(
-//                    onLogout = {
-//                        navController.navigate(Routes.LOGIN) {
-//                            popUpTo(0) // clear stack
-//                        }
-//                    }
-                )
+                DashboardScreen()
             }
-
 
             composable(Routes.MAINSCREEN) {
-                MainScreen(
-//                    onLogout = {
-//                        navController.navigate(Routes.LOGIN) {
-//                            popUpTo(0) // clear stack
-//                        }
-//                    }
-                )
+                MainScreen(navController)
             }
-
 
             composable(Routes.ONBOARDING) {
                 OnBoardingScreen(
