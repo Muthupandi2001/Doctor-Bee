@@ -55,7 +55,7 @@ sealed class BottomTab(val route: String) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun MainScreen(navController: NavController) {
+fun MainScreen(navController: NavController,onShareRequested: (String) -> Unit) {
 
     var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
 
@@ -94,7 +94,7 @@ fun MainScreen(navController: NavController) {
 
                 BottomTab.Home -> HomeScreen()
 
-                BottomTab.Search -> SearchScreen()
+                BottomTab.Search ->  SearchScreen(onInviteClicked = onShareRequested)
 
                 BottomTab.Camera -> CameraScreen()
 

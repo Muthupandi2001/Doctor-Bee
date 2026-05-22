@@ -48,6 +48,7 @@ kotlin {
             implementation("dev.gitlive:firebase-auth:2.4.0")
             implementation("dev.gitlive:firebase-database:2.4.0")
 
+
             // CLEANED: Removed the deprecated ui-backhandler line to prevent runtime crashes!
             implementation("org.jetbrains.compose.ui:ui:1.7.3")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
@@ -73,6 +74,7 @@ kotlin {
 
             // Modern KMP Navigation Event Handling (Keep this one)
             implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")
+
         }
 
         commonTest.dependencies {

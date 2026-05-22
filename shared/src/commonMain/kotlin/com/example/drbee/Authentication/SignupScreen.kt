@@ -110,7 +110,6 @@ fun SignupScreen(
                                             "colorHex" to "#6C63FF"
                                         )
 
-                                        // ✅ NEW INSTANT WAY: Save via Firebase Realtime Database
                                         Firebase.database
                                             .reference("users")
                                             .child(userId)

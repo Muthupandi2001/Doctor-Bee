@@ -60,6 +60,7 @@ fun ChatDetailScreen(
     chat: FirebaseChatModel,
     onBack: () -> Unit
 ) {
+
     var messageText by remember { mutableStateOf("") }
     var dbMessages by remember { mutableStateOf<List<FirebaseMessageModel>>(emptyList()) }
     val scope = rememberCoroutineScope()
