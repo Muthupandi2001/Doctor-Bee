@@ -78,7 +78,9 @@ class MainActivity : ComponentActivity() {
 
     private fun shareReferralLink(context: Context, userId: String) {
         // ✅ Replace with the NEW Netlify URL from Step 2
-        val baseUrl = "https://creative-bunny-e05f99.netlify.app"
+//        val baseUrl = "https://creative-bunny-e05f99.netlify.app"
+
+        val baseUrl = "https://merry-parfait-8fe34a.netlify.app/"
         val fullUrl = "$baseUrl?screen=referral&referrerId=$userId"
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
