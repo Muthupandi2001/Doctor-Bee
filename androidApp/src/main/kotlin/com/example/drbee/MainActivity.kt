@@ -7,11 +7,14 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.graphics.toColorInt
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -32,6 +35,24 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         processIntent(intent)
+
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        window.statusBarColor = android.graphics.Color.BLACK
+// Source - https://stackoverflow.com/a/79870375
+// Posted by Ajay Satpati
+// Retrieved 2026-05-24, License - CC BY-SA 4.0
+
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(
+                "#000000".toColorInt()
+            ),
+            navigationBarStyle = SystemBarStyle.dark(
+                "#000000".toColorInt()
+            )
+        )
+
+
 
         setContent {
             App(

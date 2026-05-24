@@ -1,7 +1,9 @@
 package com.example.drbee.ChatActivity
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,20 +20,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.drbee.MainScreen.BottomTab
+import com.example.drbee.MainScreen.applyGradientTint
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
+import drbee.shared.generated.resources.Res
+import drbee.shared.generated.resources.apj
+import drbee.shared.generated.resources.ic_next_button_rounded
+import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.datetime.Clock
+import org.jetbrains.compose.resources.painterResource
+import kotlin.text.contains
 import kotlin.time.TimeSource
 
 @Composable
@@ -39,6 +51,9 @@ fun ChatActivity() {
     var liveChatList by remember { mutableStateOf<List<FirebaseChatModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedChat by remember { mutableStateOf<FirebaseChatModel?>(null) }
+
+    val activeGradient = WonderBeeTheme.extendedDesign.primaryGradientBrush
+    val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
 
     // ✅ Get the current logged-in user's ID
     val currentUserId = remember { Firebase.auth.currentUser?.uid ?: "" }
@@ -108,7 +123,7 @@ fun ChatListScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+            .background(WonderBeeTheme.extendedDesign.surfaceBackground.copy(0.5f))
     ) {
         Text(
             text = "Chats",
@@ -143,29 +158,75 @@ fun ChatListScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp)
                         .clickable { onChatClick(firebaseChat) },
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(parsedColor),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = uiChatModel.name.firstOrNull()?.toString() ?: "?",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+//                        Box(
+//                            modifier = Modifier
+//                                .size(40.dp)
+//                                .clip(CircleShape)
+//                                .background(parsedColor),
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text(
+//                                text = uiChatModel.name.firstOrNull()?.toString() ?: "?",
+//                                color = Color.White,
+//                                fontWeight = FontWeight.Bold
+//                            )
+//                        }
+
+
+                     if (uiChatModel.name.lowercase().contains("abdul")){
+                         Image(
+                             painter = painterResource(Res.drawable.apj),
+                             contentDescription = "Next button",
+                             modifier = Modifier .size(60.dp).clickable(
+                                 interactionSource = remember { MutableInteractionSource() },
+                                 indication = null,
+                                 onClick = {
+
+                                 }) ,  contentScale = ContentScale.Crop
+                         )
+                     }else if (uiChatModel.name.lowercase().contains("unicorn")){
+                         Image(
+                             painter = painterResource(Res.drawable.unicorn),
+                             contentDescription = "Next button",
+                             modifier = Modifier .size(60.dp).clickable(
+                                 interactionSource = remember { MutableInteractionSource() },
+                                 indication = null,
+                                 onClick = {
+
+                                 }), contentScale = ContentScale.Crop
+                         )
+                     }
+
+
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text(text = uiChatModel.name, fontWeight = FontWeight.Bold)
-                            Text(text = uiChatModel.message, color = Color.Gray, fontSize = 14.sp)
+
+                            Text(
+                                text = uiChatModel.name,
+                                style = TextStyle(
+                                    brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            )
+
+
+                            Text(
+                                text = uiChatModel.message,
+                                style = TextStyle(
+                                    brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+//                            Text(text = uiChatModel.name, fontWeight = FontWeight.Bold)
+//                            Text(text = uiChatModel.message, color = Color.Gray, fontSize = 14.sp)
                         }
                     }
                 }

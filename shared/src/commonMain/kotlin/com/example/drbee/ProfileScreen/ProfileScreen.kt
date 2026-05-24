@@ -1,10 +1,12 @@
 package com.example.drbee.ProfileScreen
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +26,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,9 +36,13 @@ import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnab
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
+import drbee.shared.generated.resources.Res
+import drbee.shared.generated.resources.apj
+import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 
 
 @Composable
@@ -102,32 +110,75 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape)
-                    .background(WonderBeeTheme.materialScheme.primary),
+                    .background(Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(60.dp),
-                    tint = WonderBeeTheme.materialScheme.onPrimary
-                )
+//                Icon(
+//                    imageVector = Icons.Default.Person,
+//                    contentDescription = null,
+//                    modifier = Modifier.size(60.dp),
+//                    tint = WonderBeeTheme.materialScheme.onPrimary
+//                )
+
+                if (userName.lowercase().contains("abdul")){
+                    Image(
+                        painter = painterResource(Res.drawable.apj),
+                        contentDescription = "Next button",
+                        modifier = Modifier .size(100.dp).clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+
+                            }) ,  contentScale = ContentScale.Crop
+                    )
+                }else  if (userName.lowercase().contains("unicorn")){
+                    Image(
+                        painter = painterResource(Res.drawable.unicorn),
+                        contentDescription = "Next button",
+                        modifier = Modifier .size(100.dp).clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+
+                            }), contentScale = ContentScale.Crop
+                    )
+                }
             }
+
 
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
                 CircularProgressIndicator(color = WonderBeeTheme.materialScheme.primary)
             } else {
+//                Text(
+//                    text = userName,
+//                    fontSize = 24.sp,
+//                    fontWeight = FontWeight.Bold,
+//                    color = WonderBeeTheme.materialScheme.onBackground
+//                )
+
                 Text(
                     text = userName,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = WonderBeeTheme.materialScheme.onBackground
+                    style = TextStyle(
+                        brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 )
+//                Text(
+//                    text = userEmail,
+//                    fontSize = 14.sp,
+//                    color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.6f)
+//                )
+
                 Text(
                     text = userEmail,
-                    fontSize = 14.sp,
-                    color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.6f)
+                    style = TextStyle(
+                        brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 )
             }
 

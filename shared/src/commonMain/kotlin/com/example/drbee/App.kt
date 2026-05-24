@@ -1,6 +1,7 @@
 package com.example.drbee
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -72,6 +73,19 @@ fun App(
     LaunchedEffect(Unit) {
         ThemePreferencesManager.loadThemeSettings { _, _, _, _ -> }
     }
+
+
+
+//    val systemUiController = rememberSystemUiController()
+//
+//    SideEffect {
+//        systemUiController.setStatusBarColor(
+//            color = Color.Black,
+//            darkIcons = false
+//        )
+//    }
+
+
 
     WonderBeeTheme(themeType = currentAppThemeSelection) {
         NavHost(
