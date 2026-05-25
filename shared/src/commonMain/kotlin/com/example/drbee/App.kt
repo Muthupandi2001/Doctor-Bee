@@ -9,6 +9,7 @@ import com.example.drbee.Authentication.GetStartedScreen
 import com.example.drbee.Authentication.LoginScreen
 import com.example.drbee.Authentication.SignupScreen
 import com.example.drbee.Helper.SessionManager
+import com.example.drbee.Helper.SessionManager.savedUserId
 import com.example.drbee.MainScreen.MainScreen
 import com.example.drbee.OnBoarding.OnBoardingScreen
 import com.example.drbee.ProfileScreen.ProfileScreen
@@ -44,34 +45,57 @@ fun App(
     val navController = rememberNavController()
     val auth = remember { Firebase.auth }
 
-    // ✅ Reactive auth state — waits for Firebase to confirm before rendering NavHost
-//    var initialDestination by remember { mutableStateOf<String?>(null) }
+    // ✅ App starts with a safe null destination to avoid initialization races
+    var initialDestination by remember { mutableStateOf<String?>(null) }
 
-    var initialDestination = remember {
-        if (SessionManager.isLoggedIn) Routes.MAINSCREEN else Routes.GET_STARTED
-    }
+    // ✅ Tracks if we have processed our first definitive auth sweep
+    var isInitialized by remember { mutableStateOf(false) }
+    val currentUid = auth.currentUser?.uid ?: ""
 
     LaunchedEffect(Unit) {
-        // ✅ Load theme settings on startup
         ThemePreferencesManager.loadThemeSettings { _, _, _, _ -> }
+
+        // ✅ GitLive uses .authStateChanged instead of .authStateFlow
+        auth.authStateChanged.collect { firebaseUser ->
+            val sessionLoggedIn = SessionManager.isLoggedIn
+
+            Napier.d("GitLive Auth State → uid=${firebaseUser?.uid}, sessionLoggedIn=$sessionLoggedIn, fresh=${SessionManager.isFreshLogin}")
+
+            initialDestination = when {
+                // ✅ FIX: If both are valid, check if it's a brand new login session
+                firebaseUser != null && sessionLoggedIn -> {
+                    Napier.d("App → MAINSCREEN (Restoring Cache from Firebase)")
+                    SessionManager.saveLoginState(true)
+                    SessionManager.saveUserData(
+                        userId = firebaseUser.uid,
+                        email = firebaseUser.email ?: "",
+                        name = SessionManager.savedUserName
+                    )
+                    if (SessionManager.isFreshLogin) {
+                        Napier.d("App → ONBOARDING (Fresh login detected)")
+                        Routes.ONBOARDING
+                    } else {
+                        Napier.d("App → MAINSCREEN (Returning user)")
+                        Routes.MAINSCREEN
+                    }
+                }
+
+                firebaseUser == null && sessionLoggedIn && !isInitialized -> {
+                    Napier.d("App → Waiting for GitLive Firebase to finish initialization...")
+                    Routes.MAINSCREEN
+                }
+                else -> {
+                    Napier.d("App → GET_STARTED (User is completely logged out)")
+                    SessionManager.clearSession()
+                    Routes.GET_STARTED
+                }
+            }
+
+            isInitialized = true
+        }
+
     }
 
-//    LaunchedEffect(Unit) {
-//        try {
-//            auth.authStateChanged.collect { user ->
-//                // ✅ Only set once on first launch — don't re-navigate on every auth event
-//                if (initialDestination == null) {
-//                    initialDestination = if (user != null) Routes.MAINSCREEN else Routes.GET_STARTED
-//                }
-//            }
-//        } catch (e: Exception) {
-//            // ✅ Fallback if authStateChanged is not available in your KMP Firebase version
-//            initialDestination = if (auth.currentUser != null) Routes.MAINSCREEN else Routes.GET_STARTED
-//            Napier.e("Auth state stream error: ${e.message}")
-//        }
-//    }
-
-    // ✅ Deep link handler
     LaunchedEffect(deepLinkParams) {
         val referrerId = deepLinkParams?.referrerId
         if (deepLinkParams?.screen == "referral" && !referrerId.isNullOrBlank()) {
@@ -82,18 +106,14 @@ fun App(
         }
     }
 
-    // ✅ Wait until auth state is confirmed before showing any screen
     if (initialDestination == null) return
 
     WonderBeeTheme(themeType = currentAppThemeSelection) {
         NavHost(
             navController = navController,
-            startDestination = initialDestination
+            startDestination = initialDestination!!
         ) {
 
-            // ─────────────────────────────────────────
-            // GET STARTED
-            // ─────────────────────────────────────────
             composable(Routes.GET_STARTED) {
                 GetStartedScreen(
                     onGetStarted = {
@@ -104,16 +124,15 @@ fun App(
                 )
             }
 
-            // ─────────────────────────────────────────
-            // LOGIN
-            // ─────────────────────────────────────────
             composable(Routes.LOGIN) {
                 LoginScreen(
                     navController = navController,
                     onLoginSuccess = {
+                        val firebaseUser = Firebase.auth.currentUser
+                        SessionManager.saveUserID(
+                            userId = firebaseUser?.uid ?: "",
+                        )
                         navController.navigate(Routes.ONBOARDING) {
-                            // ✅ Clear GET_STARTED and LOGIN from back stack
-                            // so pressing back from onboarding doesn't return to login
                             popUpTo(Routes.GET_STARTED) { inclusive = true }
                             launchSingleTop = true
                         }
@@ -153,9 +172,8 @@ fun App(
             composable(Routes.ONBOARDING) {
                 OnBoardingScreen(
                     onBoardingFinished = {
+                        SessionManager.isFreshLogin = false
                         navController.navigate(Routes.MAINSCREEN) {
-                            // ✅ Clear onboarding from back stack
-                            // so back button from MainScreen exits the app, not re-shows onboarding
                             popUpTo(Routes.ONBOARDING) { inclusive = true }
                             launchSingleTop = true
                         }
@@ -170,13 +188,13 @@ fun App(
                 MainScreen(
                     navController = navController,
                     onShareRequested = { userId -> onShareRequested(userId) },
-                    // ✅ Logout clears the entire back stack and returns to GET_STARTED
-//                    onLogoutSuccess  = {
-//                        navController.navigate(Routes.GET_STARTED) {
-//                            popUpTo(0) { inclusive = true }
-//                            launchSingleTop = true
-//                        }
-//                    }
+                    // ✅ Pass logout handler into MainScreen
+                    onLogoutSuccess = {
+                        navController.navigate(Routes.GET_STARTED) {
+                            popUpTo(0) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
 

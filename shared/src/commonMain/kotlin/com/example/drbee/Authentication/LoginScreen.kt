@@ -197,6 +197,7 @@ fun LoginScreen(
                 scope.launch {
                     val result = authRepository.login(email, password)
                     result.onSuccess {
+                        SessionManager.isFreshLogin = true
                         SessionManager.saveLoginState(true)
                         onLoginSuccess()
                     }

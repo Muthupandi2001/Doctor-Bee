@@ -25,6 +25,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.drbee.Helper.SessionManager
 import com.example.drbee.MainScreen.BottomTab
 import com.example.drbee.MainScreen.applyGradientTint
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
@@ -50,16 +51,43 @@ import kotlin.time.TimeSource
 fun ChatActivity() {
     var liveChatList by remember { mutableStateOf<List<FirebaseChatModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var currentUid_local by remember { mutableStateOf("") }
     var selectedChat by remember { mutableStateOf<FirebaseChatModel?>(null) }
 
     val activeGradient = WonderBeeTheme.extendedDesign.primaryGradientBrush
     val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
+    val auth = remember { Firebase.auth }
+    val currentUid = auth.currentUser?.uid ?: ""
 
-    // ✅ Get the current logged-in user's ID
-    val currentUserId = remember { Firebase.auth.currentUser?.uid ?: "" }
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
-    LaunchedEffect(currentUserId) {
+
+
+    Napier.d(currentUid + "currentUid:::")
+
+    LaunchedEffect(currentUid) {
+
+        val currentUid_local = when {
+            currentUid.isNotBlank() -> currentUid
+            SessionManager.isLoggedIn -> SessionManager.savedUserId
+            else -> ""
+        }
+
+//        if (currentUid.isBlank()) {
+//            // If it's truly blank (and initialization settled), fallback to local cache instead of wiping
+//            if (SessionManager.isLoggedIn) {
+//                currentUid_local = SessionManager.savedUserId.get()
+//            } else {
+//                currentUid_local = "Anonymous User"
+//            }
+//
+//
+//
+//            isLoading = false
+//            return@LaunchedEffect
+//        }
+
+
         try {
             Firebase.database(databaseUrl)
                 .reference("users")
@@ -68,7 +96,7 @@ fun ChatActivity() {
                     dataSnapshot.children.mapNotNull { childSnapshot ->
                         try {
                             // Skip loading your own account profile in the chat contact directory list
-                            if (childSnapshot.key == currentUserId) return@mapNotNull null
+                            if (childSnapshot.key == currentUid_local) return@mapNotNull null
 
                             val baseChat = childSnapshot.value<FirebaseChatModel>()
                             baseChat.copy(id = childSnapshot.key ?: "")
@@ -179,29 +207,29 @@ fun ChatListScreen(
 //                        }
 
 
-                     if (uiChatModel.name.lowercase().contains("abdul")){
-                         Image(
-                             painter = painterResource(Res.drawable.apj),
-                             contentDescription = "Next button",
-                             modifier = Modifier .size(60.dp).clickable(
-                                 interactionSource = remember { MutableInteractionSource() },
-                                 indication = null,
-                                 onClick = {
+                        if (uiChatModel.name.lowercase().contains("abdul")) {
+                            Image(
+                                painter = painterResource(Res.drawable.apj),
+                                contentDescription = "Next button",
+                                modifier = Modifier.size(60.dp).clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
 
-                                 }) ,  contentScale = ContentScale.Crop
-                         )
-                     }else if (uiChatModel.name.lowercase().contains("unicorn")){
-                         Image(
-                             painter = painterResource(Res.drawable.unicorn),
-                             contentDescription = "Next button",
-                             modifier = Modifier .size(60.dp).clickable(
-                                 interactionSource = remember { MutableInteractionSource() },
-                                 indication = null,
-                                 onClick = {
+                                    }), contentScale = ContentScale.Crop
+                            )
+                        } else if (uiChatModel.name.lowercase().contains("unicorn")) {
+                            Image(
+                                painter = painterResource(Res.drawable.unicorn),
+                                contentDescription = "Next button",
+                                modifier = Modifier.size(60.dp).clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
 
-                                 }), contentScale = ContentScale.Crop
-                         )
-                     }
+                                    }), contentScale = ContentScale.Crop
+                            )
+                        }
 
 
                         Spacer(modifier = Modifier.width(12.dp))
@@ -234,7 +262,6 @@ fun ChatListScreen(
         }
     }
 }
-
 
 
 fun clock_timestamp(): Long = TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds

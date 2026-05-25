@@ -48,25 +48,52 @@ import org.jetbrains.compose.resources.painterResource
 
 @Composable
 fun ProfileScreen(onLogoutSuccess: () -> Unit) {
-    val auth = remember { Firebase.auth }
+
     val scope = rememberCoroutineScope()
-    val currentUid = remember { auth.currentUser?.uid ?: "" }
+    val auth = remember { Firebase.auth }
+    val currentUid = auth.currentUser?.uid ?: ""
 
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
-    var userName by remember { mutableStateOf("Loading...") }
-    var userEmail by remember { mutableStateOf("Loading...") }
-    var isLoading by remember { mutableStateOf(true) }
+    // ✅ Start with cached data — no blank flash on recomposition
+    var userName by remember {
+        mutableStateOf(
+            SessionManager.savedUserName.ifBlank { "Loading..." }
+        )
+    }
+    var userEmail by remember {
+        mutableStateOf(
+            SessionManager.savedUserEmail.ifBlank { "Loading..." }
+        )
+    }
+
+    var isLoading by remember {
+        mutableStateOf(
+            true
+        )
+    }
 
     val masterScrollState = rememberScrollState()
 
     LaunchedEffect(currentUid) {
-        if (currentUid.isBlank()) {
-            userName = "Anonymous User"
-            userEmail = "Not logged in"
-            isLoading = false
-            return@LaunchedEffect
+
+        val currentUid = when {
+            currentUid.isNotBlank() -> currentUid
+            SessionManager.isLoggedIn -> SessionManager.savedUserId
+            else -> ""
         }
+//        if (currentUid.isBlank()) {
+//            // If it's truly blank (and initialization settled), fallback to local cache instead of wiping
+//            if (SessionManager.isLoggedIn) {
+//                userName = SessionManager.savedUserName.ifBlank { "Hive Member" }
+//                userEmail = SessionManager.savedUserEmail.ifBlank { "Syncing..." }
+//            } else {
+//                userName  = "Anonymous User"
+//                userEmail = "Not logged in"
+//            }
+//            isLoading = false
+//            return@LaunchedEffect
+//        }
 
         try {
             Firebase.database(databaseUrl)
@@ -76,8 +103,17 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                 .collect { snapshot ->
                     if (snapshot.exists) {
                         val profileData = snapshot.value<FirebaseChatModel>()
+
+                        com.example.drbee.ProfileScreen.Napier.e("profileData:::" + profileData.toString())
                         userName = profileData.name.ifBlank { "No Name Provided" }
                         userEmail = profileData.email.ifBlank { auth.currentUser?.email ?: "" }
+
+                        // ✅ Safely update cache with fresh data
+                        SessionManager.saveUserData(
+                            userId = currentUid,
+                            email = userEmail,
+                            name = userName
+                        )
                     } else {
                         userName = "Hive Member"
                         userEmail = auth.currentUser?.email ?: "No Email Attached"
@@ -86,13 +122,13 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                 }
         } catch (e: Exception) {
             Napier.e("Profile credential loading failure: ${e.message}")
-            userName = "Offline Mode"
-            userEmail = auth.currentUser?.email ?: "Offline"
+            userName = SessionManager.savedUserName.ifBlank { "Offline Mode" }
+            userEmail =
+                SessionManager.savedUserEmail.ifBlank { auth.currentUser?.email ?: "Offline" }
             isLoading = false
         }
     }
 
-    // ✅ FIXED: Root content block now explicitly wraps inside the reactive dynamic Theme system provider
     WonderBeeTheme(
         themeType = ThemePreferencesManager.currentAppThemeSelection,
         customEnabled = ThemePreferencesManager.isCustomColorEnabled
@@ -114,51 +150,28 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                     .background(Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
-//                Icon(
-//                    imageVector = Icons.Default.Person,
-//                    contentDescription = null,
-//                    modifier = Modifier.size(60.dp),
-//                    tint = WonderBeeTheme.materialScheme.onPrimary
-//                )
-
-                if (userName.lowercase().contains("abdul")){
+                if (userName.lowercase().contains("abdul")) {
                     Image(
                         painter = painterResource(Res.drawable.apj),
-                        contentDescription = "Next button",
-                        modifier = Modifier .size(100.dp).clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-
-                            }) ,  contentScale = ContentScale.Crop
+                        contentDescription = null,
+                        modifier = Modifier.size(100.dp),
+                        contentScale = ContentScale.Crop
                     )
-                }else  if (userName.lowercase().contains("unicorn")){
+                } else if (userName.lowercase().contains("unicorn")) {
                     Image(
                         painter = painterResource(Res.drawable.unicorn),
-                        contentDescription = "Next button",
-                        modifier = Modifier .size(100.dp).clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-
-                            }), contentScale = ContentScale.Crop
+                        contentDescription = null,
+                        modifier = Modifier.size(100.dp),
+                        contentScale = ContentScale.Crop
                     )
                 }
             }
-
 
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
                 CircularProgressIndicator(color = WonderBeeTheme.materialScheme.primary)
             } else {
-//                Text(
-//                    text = userName,
-//                    fontSize = 24.sp,
-//                    fontWeight = FontWeight.Bold,
-//                    color = WonderBeeTheme.materialScheme.onBackground
-//                )
-
                 Text(
                     text = userName,
                     style = TextStyle(
@@ -167,12 +180,6 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                         fontWeight = FontWeight.ExtraBold
                     )
                 )
-//                Text(
-//                    text = userEmail,
-//                    fontSize = 14.sp,
-//                    color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.6f)
-//                )
-
                 Text(
                     text = userEmail,
                     style = TextStyle(
@@ -189,16 +196,37 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(imageVector = Icons.Default.Palette, contentDescription = null, tint = WonderBeeTheme.materialScheme.primary)
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    tint = WonderBeeTheme.materialScheme.primary
+                )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "App Theme Settings", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = WonderBeeTheme.materialScheme.onBackground)
+                Text(
+                    text = "App Theme Settings",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = WonderBeeTheme.materialScheme.onBackground
+                )
             }
 
-            ProfileThemeOptionRow("Classic WonderBee Light", "Traditional gold and warm ivory look", WonderBeeThemeType.DEFAULT_LIGHT)
+            ProfileThemeOptionRow(
+                "Classic WonderBee Light",
+                "Traditional gold and warm ivory look",
+                WonderBeeThemeType.DEFAULT_LIGHT
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            ProfileThemeOptionRow("Warm Honey Glow", "Rich amber tones for soft reading comfort", WonderBeeThemeType.WARM_HONEY)
+            ProfileThemeOptionRow(
+                "Warm Honey Glow",
+                "Rich amber tones for soft reading comfort",
+                WonderBeeThemeType.WARM_HONEY
+            )
             Spacer(modifier = Modifier.height(8.dp))
-            ProfileThemeOptionRow("Midnight Mint Obsidian", "Battery-saving dark mode style configuration", WonderBeeThemeType.DARK_MINT)
+            ProfileThemeOptionRow(
+                "Midnight Mint Obsidian",
+                "Battery-saving dark mode style configuration",
+                WonderBeeThemeType.DARK_MINT
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -206,13 +234,16 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ─────────────────────────────────────────
+            // LOGOUT BUTTON
+            // ─────────────────────────────────────────
             Button(
                 onClick = {
                     scope.launch {
                         try {
                             auth.signOut()
                             if (Firebase.auth.currentUser == null) {
-                                // ✅ Clear persisted session
+                                // ✅ Wipe everything — login state + user data cache
                                 SessionManager.clearSession()
                                 onLogoutSuccess()
                             }
@@ -258,10 +289,22 @@ fun ProfileThemeOptionRow(title: String, description: String, targetTheme: Wonde
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = WonderBeeTheme.materialScheme.surface)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = WonderBeeTheme.materialScheme.onBackground)
-                Text(text = description, fontSize = 11.sp, color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.6f))
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = WonderBeeTheme.materialScheme.onBackground
+                )
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.6f)
+                )
             }
             RadioButton(
                 selected = isSelected,
@@ -303,8 +346,17 @@ fun FullSpectrumColorPickerPanel() {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("🎨 Custom 2D Color Picker Matrix", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = WonderBeeTheme.materialScheme.onBackground)
-                    Text("Drag inside the spectrum to overlay custom colors over your theme layout.", fontSize = 11.sp, color = Color.Gray)
+                    Text(
+                        "🎨 Custom 2D Color Picker Matrix",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WonderBeeTheme.materialScheme.onBackground
+                    )
+                    Text(
+                        "Drag inside the spectrum to overlay custom colors over your theme layout.",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
                 }
 
                 if (ThemePreferencesManager.isCustomColorEnabled) {
@@ -313,11 +365,19 @@ fun FullSpectrumColorPickerPanel() {
                             ThemePreferencesManager.isCustomColorEnabled = false
                             ThemePreferencesManager.saveThemeState(
                                 ThemePreferencesManager.currentAppThemeSelection,
-                                false, cursorPositionX1, cursorPositionY1, cursorPositionX2, cursorPositionY2
+                                false,
+                                cursorPositionX1,
+                                cursorPositionY1,
+                                cursorPositionX2,
+                                cursorPositionY2
                             )
                         }
                     ) {
-                        Text("Reset Custom", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        Text(
+                            "Reset Custom",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
@@ -328,25 +388,43 @@ fun FullSpectrumColorPickerPanel() {
                 OutlinedButton(
                     onClick = { selectingFirstColor = true },
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (selectingFirstColor) ThemePreferencesManager.customColorStart.copy(alpha = 0.15f) else Color.Transparent
+                        containerColor = if (selectingFirstColor) ThemePreferencesManager.customColorStart.copy(
+                            alpha = 0.15f
+                        ) else Color.Transparent
                     ),
                     modifier = Modifier.weight(1f).padding(end = 4.dp)
                 ) {
-                    Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(ThemePreferencesManager.customColorStart))
+                    Box(
+                        modifier = Modifier.size(14.dp).clip(CircleShape)
+                            .background(ThemePreferencesManager.customColorStart)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Color 1", fontSize = 12.sp, color = WonderBeeTheme.materialScheme.onBackground)
+                    Text(
+                        "Color 1",
+                        fontSize = 12.sp,
+                        color = WonderBeeTheme.materialScheme.onBackground
+                    )
                 }
 
                 OutlinedButton(
                     onClick = { selectingFirstColor = false },
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (!selectingFirstColor) ThemePreferencesManager.customColorEnd.copy(alpha = 0.15f) else Color.Transparent
+                        containerColor = if (!selectingFirstColor) ThemePreferencesManager.customColorEnd.copy(
+                            alpha = 0.15f
+                        ) else Color.Transparent
                     ),
                     modifier = Modifier.weight(1f).padding(start = 4.dp)
                 ) {
-                    Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(ThemePreferencesManager.customColorEnd))
+                    Box(
+                        modifier = Modifier.size(14.dp).clip(CircleShape)
+                            .background(ThemePreferencesManager.customColorEnd)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Color 2", fontSize = 12.sp, color = WonderBeeTheme.materialScheme.onBackground)
+                    Text(
+                        "Color 2",
+                        fontSize = 12.sp,
+                        color = WonderBeeTheme.materialScheme.onBackground
+                    )
                 }
             }
 
@@ -359,7 +437,10 @@ fun FullSpectrumColorPickerPanel() {
                         fun processInputCoordinate(offsetX: Float, offsetY: Float) {
                             val percentageX = (offsetX / size.width).coerceIn(0f, 1f)
                             val percentageY = (offsetY / size.height).coerceIn(0f, 1f)
-                            val pickedColor = ThemePreferencesManager.getColorFrom2DMatrix(percentageX, percentageY)
+                            val pickedColor = ThemePreferencesManager.getColorFrom2DMatrix(
+                                percentageX,
+                                percentageY
+                            )
 
                             if (selectingFirstColor) {
                                 cursorPositionX1 = percentageX
@@ -373,9 +454,12 @@ fun FullSpectrumColorPickerPanel() {
 
                             ThemePreferencesManager.isCustomColorEnabled = true
                             ThemePreferencesManager.saveThemeState(
-                                ThemePreferencesManager.currentAppThemeSelection, ThemePreferencesManager.isCustomColorEnabled,
-                                cursorPositionX1, cursorPositionY1,
-                                cursorPositionX2, cursorPositionY2
+                                ThemePreferencesManager.currentAppThemeSelection,
+                                ThemePreferencesManager.isCustomColorEnabled,
+                                cursorPositionX1,
+                                cursorPositionY1,
+                                cursorPositionX2,
+                                cursorPositionY2
                             )
                         }
 
@@ -388,7 +472,10 @@ fun FullSpectrumColorPickerPanel() {
                         fun processInputCoordinate(offsetX: Float, offsetY: Float) {
                             val percentageX = (offsetX / size.width).coerceIn(0f, 1f)
                             val percentageY = (offsetY / size.height).coerceIn(0f, 1f)
-                            val pickedColor = ThemePreferencesManager.getColorFrom2DMatrix(percentageX, percentageY)
+                            val pickedColor = ThemePreferencesManager.getColorFrom2DMatrix(
+                                percentageX,
+                                percentageY
+                            )
 
                             if (selectingFirstColor) {
                                 cursorPositionX1 = percentageX
@@ -402,9 +489,12 @@ fun FullSpectrumColorPickerPanel() {
 
                             ThemePreferencesManager.isCustomColorEnabled = true
                             ThemePreferencesManager.saveThemeState(
-                                ThemePreferencesManager.currentAppThemeSelection, ThemePreferencesManager.isCustomColorEnabled,
-                                cursorPositionX1, cursorPositionY1,
-                                cursorPositionX2, cursorPositionY2
+                                ThemePreferencesManager.currentAppThemeSelection,
+                                ThemePreferencesManager.isCustomColorEnabled,
+                                cursorPositionX1,
+                                cursorPositionY1,
+                                cursorPositionX2,
+                                cursorPositionY2
                             )
                         }
 
@@ -415,7 +505,15 @@ fun FullSpectrumColorPickerPanel() {
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val spectrumBrush = Brush.horizontalGradient(
-                        colors = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
+                        colors = listOf(
+                            Color.Red,
+                            Color.Yellow,
+                            Color.Green,
+                            Color.Cyan,
+                            Color.Blue,
+                            Color.Magenta,
+                            Color.Red
+                        )
                     )
                     drawRect(brush = spectrumBrush)
 
@@ -431,13 +529,35 @@ fun FullSpectrumColorPickerPanel() {
 
                     val cursorRadius = 10.dp.toPx()
 
-                    val center1 = Offset(cursorPositionX1 * size.width, cursorPositionY1 * size.height)
-                    drawCircle(color = Color.White, radius = cursorRadius, center = center1, style = Stroke(width = 3.dp.toPx()))
-                    drawCircle(color = Color.Black.copy(alpha = 0.6f), radius = cursorRadius - 1.dp.toPx(), center = center1, style = Stroke(width = 1.dp.toPx()))
+                    val center1 =
+                        Offset(cursorPositionX1 * size.width, cursorPositionY1 * size.height)
+                    drawCircle(
+                        color = Color.White,
+                        radius = cursorRadius,
+                        center = center1,
+                        style = Stroke(width = 3.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        radius = cursorRadius - 1.dp.toPx(),
+                        center = center1,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
 
-                    val center2 = Offset(cursorPositionX2 * size.width, cursorPositionY2 * size.height)
-                    drawCircle(color = Color.White, radius = cursorRadius, center = center2, style = Stroke(width = 3.dp.toPx()))
-                    drawCircle(color = Color.Black.copy(alpha = 0.6f), radius = cursorRadius - 1.dp.toPx(), center = center2, style = Stroke(width = 1.dp.toPx()))
+                    val center2 =
+                        Offset(cursorPositionX2 * size.width, cursorPositionY2 * size.height)
+                    drawCircle(
+                        color = Color.White,
+                        radius = cursorRadius,
+                        center = center2,
+                        style = Stroke(width = 3.dp.toPx())
+                    )
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        radius = cursorRadius - 1.dp.toPx(),
+                        center = center2,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
                 }
             }
 
@@ -450,9 +570,19 @@ fun FullSpectrumColorPickerPanel() {
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         if (ThemePreferencesManager.isCustomColorEnabled) {
-                            Brush.horizontalGradient(listOf(ThemePreferencesManager.customColorStart, ThemePreferencesManager.customColorEnd))
+                            Brush.horizontalGradient(
+                                listOf(
+                                    ThemePreferencesManager.customColorStart,
+                                    ThemePreferencesManager.customColorEnd
+                                )
+                            )
                         } else {
-                            Brush.horizontalGradient(listOf(WonderBeeTheme.materialScheme.primary, WonderBeeTheme.materialScheme.secondary))
+                            Brush.horizontalGradient(
+                                listOf(
+                                    WonderBeeTheme.materialScheme.primary,
+                                    WonderBeeTheme.materialScheme.secondary
+                                )
+                            )
                         }
                     ),
                 contentAlignment = Alignment.Center

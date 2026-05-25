@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 import dev.gitlive.firebase.Firebase
@@ -77,7 +78,21 @@ fun ChatDetailScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    val currentUserId = remember { Firebase.auth.currentUser?.uid ?: "" }
+    var currentUserId by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+
+        currentUserId = when {
+            Firebase.auth.currentUser?.uid?.isNotBlank() == true ->
+                Firebase.auth.currentUser?.uid ?: ""
+
+            SessionManager.savedUserId.isNotBlank() ->
+                SessionManager.savedUserId
+
+            else -> ""
+        }
+    }
+
 
     // ✅ FIX 1: Explicit trailing forward slash ensures regional sharding routing matches across targets
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
@@ -96,6 +111,7 @@ fun ChatDetailScreen(
             Color(0xFF075E54)
         }
     }
+
 
     LaunchedEffect(dbMessages.size) {
         if (dbMessages.isNotEmpty()) {
@@ -139,9 +155,7 @@ fun ChatDetailScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(WonderBeeTheme.extendedDesign.surfaceBackground)
-            .imePadding()  // ✅ Only here, on the outermost container
-    ) {
+            .background(WonderBeeTheme.extendedDesign.surfaceBackground)) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -263,7 +277,8 @@ fun ChatDetailScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(WonderBeeTheme.extendedDesign.surfaceBackground)
-                    .padding(12.dp),           // ✅ No IME padding here at all
+                    .padding(12.dp)
+                    .imePadding(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
