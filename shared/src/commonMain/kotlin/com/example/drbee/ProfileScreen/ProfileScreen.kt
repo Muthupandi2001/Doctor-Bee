@@ -31,9 +31,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.drbee.ChatActivity.FirebaseChatModel
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
+import com.example.drbee.Routes
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
@@ -47,7 +49,7 @@ import org.jetbrains.compose.resources.painterResource
 
 
 @Composable
-fun ProfileScreen(onLogoutSuccess: () -> Unit) {
+fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
 
     val scope = rememberCoroutineScope()
     val auth = remember { Firebase.auth }
@@ -143,10 +145,19 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
+            val currentUid = when {
+                currentUid.isNotBlank() -> currentUid
+                SessionManager.isLoggedIn -> SessionManager.savedUserId
+                else -> ""
+            }
+
             Box(
                 modifier = Modifier
                     .size(100.dp)
                     .clip(CircleShape)
+                    .clickable(){
+                        navController.navigate("profile/$currentUid")
+                    }
                     .background(Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {

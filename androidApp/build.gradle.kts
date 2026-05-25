@@ -12,6 +12,9 @@ dependencies {
     implementation("dev.gitlive:firebase-auth:1.13.0")
     implementation("dev.gitlive:firebase-database:1.13.0")
 
+    implementation("androidx.compose.material3:material3:1.2.1")
+
+
     // ✅ FIX: Add the missing native Android SDK artifact managed by the BoM platform
     implementation("com.google.firebase:firebase-database")
 

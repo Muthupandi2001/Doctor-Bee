@@ -127,3 +127,10 @@ object Logger {
         Napier.base(DebugAntilog())
     }
 }
+
+
+ val BeeBackground = Color(0xFFFFFBF0)
+ val BeeAmber = Color(0xFFFFB300)
+ val BeeAmberLight = Color(0xFFFFE082)
+ val BeeBrown = Color(0xFF3E2723)
+val BeeCard = Color(0xFFFFFFFF)

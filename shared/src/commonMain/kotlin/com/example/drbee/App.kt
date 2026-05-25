@@ -1,33 +1,37 @@
 package com.example.drbee
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.drbee.Authentication.DashboardScreen
 import com.example.drbee.Authentication.GetStartedScreen
 import com.example.drbee.Authentication.LoginScreen
 import com.example.drbee.Authentication.SignupScreen
 import com.example.drbee.Helper.SessionManager
-import com.example.drbee.Helper.SessionManager.savedUserId
 import com.example.drbee.MainScreen.MainScreen
 import com.example.drbee.OnBoarding.OnBoardingScreen
-import com.example.drbee.ProfileScreen.ProfileScreen
+import com.example.drbee.ProfileScreen.OtherProfile
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.currentAppThemeSelection
 import com.example.drbee.ProfileScreen.WonderBeeTheme
+import com.example.drbee.ProfileScreen.profileScreenKMP
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import io.github.aakira.napier.Napier
 
 object Routes {
-    const val GET_STARTED = "get_started"
-    const val LOGIN = "login"
-    const val SIGNUP = "signup"
-    const val DASHBOARD = "dashboard"
-    const val MAINSCREEN = "mainscreen"
-    const val ONBOARDING = "onBoarding"
-    const val PROFILE = "profile/{userId}"
+    const val GET_STARTED      = "get_started"
+    const val PROFILE_SETTING  = "profile_setting"
+    const val LOGIN            = "login"
+    const val SIGNUP           = "signup"
+    const val DASHBOARD        = "dashboard"
+    const val MAINSCREEN       = "mainscreen"
+    const val ONBOARDING       = "onBoarding"
+    const val PROFILE          = "profile/{userId}"
 
     fun profile(userId: String) = "profile/$userId"
 }
@@ -40,88 +44,60 @@ data class DeepLinkParams(
 @Composable
 fun App(
     deepLinkParams: DeepLinkParams?,
-    onShareRequested: (String) -> Unit
+    onShareRequested: (String) -> Unit,
+    onPickImageRequested: ((String) -> Unit) -> Unit,
+    // Android side passes a lambda that decodes Base64 → ImageBitmap (no android.* in commonMain)
+    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit
 ) {
     val navController = rememberNavController()
     val auth = remember { Firebase.auth }
 
-    // ✅ App starts with a safe null destination to avoid initialization races
     var initialDestination by remember { mutableStateOf<String?>(null) }
-
-    // ✅ Tracks if we have processed our first definitive auth sweep
     var isInitialized by remember { mutableStateOf(false) }
-    val currentUid = auth.currentUser?.uid ?: ""
 
     LaunchedEffect(Unit) {
         ThemePreferencesManager.loadThemeSettings { _, _, _, _ -> }
 
-        // ✅ GitLive uses .authStateChanged instead of .authStateFlow
         auth.authStateChanged.collect { firebaseUser ->
             val sessionLoggedIn = SessionManager.isLoggedIn
-
-            Napier.d("GitLive Auth State → uid=${firebaseUser?.uid}, sessionLoggedIn=$sessionLoggedIn, fresh=${SessionManager.isFreshLogin}")
+            Napier.d("GitLive Auth State → uid=${firebaseUser?.uid}, sessionLoggedIn=$sessionLoggedIn")
 
             initialDestination = when {
-                // ✅ FIX: If both are valid, check if it's a brand new login session
                 firebaseUser != null && sessionLoggedIn -> {
-                    Napier.d("App → MAINSCREEN (Restoring Cache from Firebase)")
                     SessionManager.saveLoginState(true)
                     SessionManager.saveUserData(
                         userId = firebaseUser.uid,
-                        email = firebaseUser.email ?: "",
-                        name = SessionManager.savedUserName
+                        email  = firebaseUser.email ?: "",
+                        name   = SessionManager.savedUserName
                     )
-                    if (SessionManager.isFreshLogin) {
-                        Napier.d("App → ONBOARDING (Fresh login detected)")
-                        Routes.ONBOARDING
-                    } else {
-                        Napier.d("App → MAINSCREEN (Returning user)")
-                        Routes.MAINSCREEN
-                    }
+                    if (SessionManager.isFreshLogin) Routes.ONBOARDING else Routes.MAINSCREEN
                 }
-
-                firebaseUser == null && sessionLoggedIn && !isInitialized -> {
-                    Napier.d("App → Waiting for GitLive Firebase to finish initialization...")
-                    Routes.MAINSCREEN
-                }
+                firebaseUser == null && sessionLoggedIn && !isInitialized -> Routes.MAINSCREEN
                 else -> {
-                    Napier.d("App → GET_STARTED (User is completely logged out)")
                     SessionManager.clearSession()
                     Routes.GET_STARTED
                 }
             }
-
             isInitialized = true
         }
-
     }
 
     LaunchedEffect(deepLinkParams) {
         val referrerId = deepLinkParams?.referrerId
         if (deepLinkParams?.screen == "referral" && !referrerId.isNullOrBlank()) {
-            Napier.d("Deep link referrerId received: $referrerId")
-            navController.navigate(Routes.profile(referrerId)) {
-                launchSingleTop = true
-            }
+            navController.navigate(Routes.profile(referrerId)) { launchSingleTop = true }
         }
     }
 
     if (initialDestination == null) return
 
     WonderBeeTheme(themeType = currentAppThemeSelection) {
-        NavHost(
-            navController = navController,
-            startDestination = initialDestination!!
-        ) {
+        NavHost(navController = navController, startDestination = initialDestination!!) {
 
             composable(Routes.GET_STARTED) {
-                GetStartedScreen(
-                    onGetStarted = {
-                        navController.navigate(Routes.LOGIN) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
+                GetStartedScreen(onGetStarted = {
+                    navController.navigate(Routes.LOGIN) { launchSingleTop = true }
+                })
             }
 
             composable(Routes.LOGIN) {
@@ -129,66 +105,38 @@ fun App(
                     navController = navController,
                     onLoginSuccess = {
                         val firebaseUser = Firebase.auth.currentUser
-                        SessionManager.saveUserID(
-                            userId = firebaseUser?.uid ?: "",
-                        )
+                        SessionManager.saveUserID(userId = firebaseUser?.uid ?: "")
                         navController.navigate(Routes.ONBOARDING) {
                             popUpTo(Routes.GET_STARTED) { inclusive = true }
                             launchSingleTop = true
                         }
                     },
                     onNavigateToSignup = {
-                        navController.navigate(Routes.SIGNUP) {
-                            launchSingleTop = true
-                        }
+                        navController.navigate(Routes.SIGNUP) { launchSingleTop = true }
                     }
                 )
             }
 
-            // ─────────────────────────────────────────
-            // SIGNUP
-            // ─────────────────────────────────────────
             composable(Routes.SIGNUP) {
-                SignupScreen(
-                    onNavigateToLogin = {
-                        navController.navigate(Routes.LOGIN) {
-//                            popUpTo(Routes.SIGNUP) { inclusive = true }
-//                            launchSingleTop = true
-                        }
-                    }
-                )
+                SignupScreen(onNavigateToLogin = { navController.navigate(Routes.LOGIN) })
             }
 
-            // ─────────────────────────────────────────
-            // DASHBOARD
-            // ─────────────────────────────────────────
-            composable(Routes.DASHBOARD) {
-                DashboardScreen()
-            }
+            composable(Routes.DASHBOARD) { DashboardScreen() }
 
-            // ─────────────────────────────────────────
-            // ONBOARDING
-            // ─────────────────────────────────────────
             composable(Routes.ONBOARDING) {
-                OnBoardingScreen(
-                    onBoardingFinished = {
-                        SessionManager.isFreshLogin = false
-                        navController.navigate(Routes.MAINSCREEN) {
-                            popUpTo(Routes.ONBOARDING) { inclusive = true }
-                            launchSingleTop = true
-                        }
+                OnBoardingScreen(onBoardingFinished = {
+                    SessionManager.isFreshLogin = false
+                    navController.navigate(Routes.MAINSCREEN) {
+                        popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        launchSingleTop = true
                     }
-                )
+                })
             }
 
-            // ─────────────────────────────────────────
-            // MAIN SCREEN
-            // ─────────────────────────────────────────
             composable(Routes.MAINSCREEN) {
                 MainScreen(
                     navController = navController,
                     onShareRequested = { userId -> onShareRequested(userId) },
-                    // ✅ Pass logout handler into MainScreen
                     onLogoutSuccess = {
                         navController.navigate(Routes.GET_STARTED) {
                             popUpTo(0) { inclusive = true }
@@ -198,44 +146,26 @@ fun App(
                 )
             }
 
-            // ─────────────────────────────────────────
-            // PROFILE (deep link target)
-            // ─────────────────────────────────────────
-//            composable(Routes.PROFILE) { backStackEntry ->
-//                val userId: String = backStackEntry
-//                    .arguments
-//                    ?.getString("userId")   // ✅ Correct way to read path params (not savedStateHandle)
-//                    ?: ""
-//
-//                ProfileScreen(
-//                    userId           = userId,
-//                    onBack           = { navController.popBackStack() },
-//                    onShareRequested = { id -> onShareRequested(id) },
-//                    // ✅ Logout from profile also clears everything
-//                    onLogoutSuccess  = {
-//                        navController.navigate(Routes.GET_STARTED) {
-//                            popUpTo(0) { inclusive = true }
-//                            launchSingleTop = true
-//                        }
-//                    }
-//                )
-//            }
-
-
-            // ✅ Profile route — receives userId from path segment
-            composable(Routes.PROFILE) { backStackEntry ->
-                // ✅ KMP-safe — reads directly from savedStateHandle
-                val userId: String = backStackEntry
-                    .savedStateHandle
-                    .get<String>("userId")
-                    ?: ""
-
-                ProfileScreen(
+            // ✅ navArgument declared so userId is read from the path, not savedStateHandle
+            composable(
+                route = Routes.PROFILE,
+                arguments = listOf(navArgument("userId") {
+                    type = NavType.StringType; defaultValue = ""
+                })
+            ) { backStackEntry ->
+                // ✅ savedStateHandle is the KMP-safe way to read typed nav args in commonMain.
+                // backStackEntry.arguments is android.os.Bundle which has no getString in commonMain.
+                val userId = backStackEntry.savedStateHandle.get<String>("userId") ?: ""
+                OtherProfile(
                     userId = userId,
                     onBack = { navController.popBackStack() },
-                    onShareRequested = { id -> onShareRequested(id) }
+                    onShareRequested = { id -> onShareRequested(id) },
+                    onPickImageRequested = onPickImageRequested,
+                    onDecodeImageRequested = onDecodeImageRequested  // threaded through
                 )
             }
+
+            composable(Routes.PROFILE_SETTING) { profileScreenKMP() }
         }
     }
 }

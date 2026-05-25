@@ -112,7 +112,7 @@ fun MainScreen(
 
                 BottomTab.Chat -> ChatActivity()
 
-                BottomTab.Profile -> ProfileScreen(
+                BottomTab.Profile -> ProfileScreen(navController,
                     onLogoutSuccess = {
                         // ✅ Session is already cleared inside ProfileScreen
                         // before this lambda is called.

@@ -75,6 +75,12 @@ kotlin {
             // Modern KMP Navigation Event Handling (Keep this one)
             implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")
 
+            implementation("io.coil-kt.coil3:coil-compose:3.0.0-alpha06")
+            implementation("io.coil-kt.coil3:coil-network-ktor:3.0.0-alpha06")
+
+            implementation("org.jetbrains.compose.ui:ui-graphics:1.6.11")
+            implementation("org.jetbrains.skiko:skiko:0.8.4")
+
         }
 
         commonTest.dependencies {
