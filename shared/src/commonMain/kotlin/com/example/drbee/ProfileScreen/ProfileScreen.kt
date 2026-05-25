@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.drbee.ChatActivity.FirebaseChatModel
+import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
@@ -210,7 +211,11 @@ fun ProfileScreen(onLogoutSuccess: () -> Unit) {
                     scope.launch {
                         try {
                             auth.signOut()
-                            onLogoutSuccess()
+                            if (Firebase.auth.currentUser == null) {
+                                // ✅ Clear persisted session
+                                SessionManager.clearSession()
+                                onLogoutSuccess()
+                            }
                         } catch (e: Exception) {
                             Napier.e("Sign out runtime failure: ${e.message}")
                         }

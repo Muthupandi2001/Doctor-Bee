@@ -69,8 +69,8 @@ kotlin {
             implementation(compose.materialIconsExtended)
             implementation(libs.napier)
 
-            implementation("com.russhwolf:multiplatform-settings-no-arg:1.3.0")
-
+            implementation("com.russhwolf:multiplatform-settings:1.1.1")
+            implementation("com.russhwolf:multiplatform-settings-no-arg:1.1.1")
 
             // Modern KMP Navigation Event Handling (Keep this one)
             implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")

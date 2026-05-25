@@ -42,7 +42,12 @@ fun SignupScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "WonderBee", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BeeAmberGold)
+        Text(
+            text = "WonderBee",
+            fontSize = 32.sp,
+            fontWeight = FontWeight.Bold,
+            color = BeeAmberGold
+        )
         Spacer(modifier = Modifier.height(20.dp))
 
         OutlinedTextField(
@@ -82,62 +87,60 @@ fun SignupScreen(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(20.dp))
-
-
-                Button(
-                    onClick = {
-                        if (password != confirmPassword) {
-                            message = "Password mismatch"
-                            return@Button
-                        }
-
-                        scope.launch {
-                            val result = authRepository.signup(email, password)
-
-                            result.onSuccess {
-                                try {
-                                    val currentUser = Firebase.auth.currentUser
-                                    val userId = currentUser?.uid
-
-                                    if (userId != null) {
-                                        // Clean data structure for instant serialization
-                                        val newUserMap = mapOf(
-                                            "id" to userId,
-                                            "name" to fullName,
-                                            "email" to email,
-                                            "message" to "Hey! I just joined WonderBee.",
-                                            "time" to "Just now",
-                                            "colorHex" to "#6C63FF"
-                                        )
-
-                                        Firebase.database
-                                            .reference("users")
-                                            .child(userId)
-                                            .setValue(newUserMap)
-
-                                        message = "Signup Success"
-                                        onNavigateToLogin()
-                                    } else {
-                                        message = "User verification index missing"
-                                    }
-                                } catch (e: Exception) {
-                                    message = "Database creation failed: ${e.message}"
-                                    Napier.e("Database Error: ${e.message}", throwable = e)
-                                }
-                            }
-                            result.onFailure { error ->
-                                // This will now print "The email address is already in use by another account." directly onto your UI screen
-                                message = error.message ?: "Signup Failed"
-                                Napier.e("Auth Signup Failed: ${error.message}", throwable = error)
-                            }
-
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = BeeAmberGold)
-                ) {
-                    Text("Create Account", color = Color.White)
+        Button(
+            onClick = {
+                if (password != confirmPassword) {
+                    message = "Password mismatch"
+                    return@Button
                 }
+
+                scope.launch {
+                    val result = authRepository.signup(email, password)
+
+                    result.onSuccess {
+                        try {
+                            val currentUser = Firebase.auth.currentUser
+                            val userId = currentUser?.uid
+
+                            if (userId != null) {
+                                // Clean data structure for instant serialization
+                                val newUserMap = mapOf(
+                                    "id" to userId,
+                                    "name" to fullName,
+                                    "email" to email,
+                                    "message" to "Hey! I just joined WonderBee.",
+                                    "time" to "Just now",
+                                    "colorHex" to "#6C63FF"
+                                )
+
+                                Firebase.database
+                                    .reference("users")
+                                    .child(userId)
+                                    .setValue(newUserMap)
+
+                                message = "Signup Success"
+                                onNavigateToLogin()
+                            } else {
+                                message = "User verification index missing"
+                            }
+                        } catch (e: Exception) {
+                            message = "Database creation failed: ${e.message}"
+                            Napier.e("Database Error: ${e.message}", throwable = e)
+                        }
+                    }
+                    result.onFailure { error ->
+                        // This will now print "The email address is already in use by another account." directly onto your UI screen
+                        message = error.message ?: "Signup Failed"
+                        Napier.e("Auth Signup Failed: ${error.message}", throwable = error)
+                    }
+
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = BeeAmberGold)
+        ) {
+            Text("Create Account", color = Color.White)
+        }
 
 
         Spacer(modifier = Modifier.height(20.dp))

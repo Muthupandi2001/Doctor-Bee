@@ -136,529 +136,197 @@ fun ChatDetailScreen(
     }
 
 
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+            .imePadding()  // ✅ Only here, on the outermost container
     ) {
-
-        // =========================
-        // TOP HEADER
-        // =========================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .background(WonderBeeTheme.extendedDesign.primaryGradientBrush)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        )
-        {
-
-            Icon(
-                imageVector = Icons.Default.ArrowBack,
-                contentDescription = null,
-                tint = WonderBeeTheme.materialScheme.onPrimary,
-                modifier = Modifier.clickable { onBack() }
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .size(45.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-
-                if (chat.name.lowercase().contains("abdul")) {
-
-                    Image(
-                        painter = painterResource(Res.drawable.apj),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-
-                } else if (chat.name.lowercase().contains("unicorn")) {
-
-                    Image(
-                        painter = painterResource(Res.drawable.unicorn),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Text(
-                text = chat.name,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        }
-
-        // =========================
-        // CHAT LIST
-        // =========================
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = 90.dp,
-                    bottom = 90.dp,
-                    start = 10.dp,
-                    end = 10.dp
-                )
-                .align(Alignment.Center),
-            verticalArrangement = Arrangement.Bottom
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
 
-            items(dbMessages) { msg ->
-
+            // =========================
+            // TOP HEADER
+            // =========================
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(WonderBeeTheme.extendedDesign.primaryGradientBrush)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = null,
+                    tint = WonderBeeTheme.materialScheme.onPrimary,
+                    modifier = Modifier.clickable { onBack() }
+                )
+                Spacer(modifier = Modifier.width(12.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    contentAlignment = if (msg.isMe)
-                        Alignment.CenterEnd
-                    else
-                        Alignment.CenterStart
+                        .size(45.dp)
+                        .clip(CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
+                    if (chat.name.lowercase().contains("abdul")) {
+                        Image(
+                            painter = painterResource(Res.drawable.apj),
+                            contentDescription = null,
+                            modifier = Modifier.size(60.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (chat.name.lowercase().contains("unicorn")) {
+                        Image(
+                            painter = painterResource(Res.drawable.unicorn),
+                            contentDescription = null,
+                            modifier = Modifier.size(60.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = chat.name,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
 
-                    val bubbleBgColor =
-                        if (msg.isMe) {
-
+            // =========================
+            // CHAT LIST — takes all remaining space
+            // =========================
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)          // ✅ Fills space between header and input bar
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                items(dbMessages) { msg ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        contentAlignment = if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
+                    ) {
+                        val bubbleBgColor = if (msg.isMe) {
                             if (ThemePreferencesManager.isCustomColorEnabled)
                                 ThemePreferencesManager.customColorEnd
                             else
                                 WonderBeeTheme.materialScheme.primary
-
                         } else {
-
                             if (ThemePreferencesManager.isCustomColorEnabled)
                                 ThemePreferencesManager.customColorStart
                             else
                                 WonderBeeTheme.materialScheme.secondary
                         }
 
-                    val luminance =
-                        (0.299f * bubbleBgColor.red) +
+                        val luminance = (0.299f * bubbleBgColor.red) +
                                 (0.587f * bubbleBgColor.green) +
                                 (0.114f * bubbleBgColor.blue)
 
-                    val bubbleTextColor =
-                        if (luminance > 0.5f)
-                            Color(0xFF0F1A34)
-                        else
-                            Color.White
+                        val bubbleTextColor = if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
 
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = bubbleBgColor
-                        ),
-
-                        shape = if (msg.isMe) {
-
-                            RoundedCornerShape(
-                                topStart = 16.dp,
-                                topEnd = 16.dp,
-                                bottomStart = 16.dp,
-                                bottomEnd = 2.dp
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = bubbleBgColor),
+                            shape = if (msg.isMe) {
+                                RoundedCornerShape(
+                                    topStart = 16.dp, topEnd = 16.dp,
+                                    bottomStart = 16.dp, bottomEnd = 2.dp
+                                )
+                            } else {
+                                RoundedCornerShape(
+                                    topStart = 16.dp, topEnd = 16.dp,
+                                    bottomStart = 2.dp, bottomEnd = 16.dp
+                                )
+                            },
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Text(
+                                text = msg.text,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                color = bubbleTextColor,
+                                style = MaterialTheme.typography.bodyMedium
                             )
-
-                        } else {
-
-                            RoundedCornerShape(
-                                topStart = 16.dp,
-                                topEnd = 16.dp,
-                                bottomStart = 2.dp,
-                                bottomEnd = 16.dp
-                            )
-                        },
-
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = 2.dp
-                        )
-                    ) {
-
-                        Text(
-                            text = msg.text,
-                            modifier = Modifier.padding(
-                                horizontal = 14.dp,
-                                vertical = 10.dp
-                            ),
-                            color = bubbleTextColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        }
                     }
                 }
             }
-        }
 
-        // =========================
-        // BOTTOM MESSAGE BAR
-        // =========================
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .background(
-                    WonderBeeTheme.extendedDesign.surfaceBackground
-                )
-                .windowInsetsPadding(WindowInsets.ime)
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        )
-        {
-
-            OutlinedTextField(
-                value = messageText,
-
-                onValueChange = { messageText = it },
-
-                modifier = Modifier.weight(1f),
-
-                placeholder = {
-
-                    Text(
-                        text = "Type message...",
-                        color = WonderBeeTheme
-                            .materialScheme
-                            .onBackground
-                            .copy(alpha = 0.5f)
+            // =========================
+            // BOTTOM MESSAGE BAR
+            // =========================
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+                    .padding(12.dp),           // ✅ No IME padding here at all
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = {
+                        Text(
+                            text = "Type message...",
+                            color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.5f)
+                        )
+                    },
+                    shape = RoundedCornerShape(30.dp),
+                    textStyle = LocalTextStyle.current.copy(
+                        color = WonderBeeTheme.materialScheme.onBackground
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
+                        unfocusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
+                        focusedBorderColor = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
+                        unfocusedBorderColor = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
+                        cursorColor = WonderBeeTheme.materialScheme.primary
                     )
-                },
-
-                shape = RoundedCornerShape(30.dp),
-
-                textStyle = LocalTextStyle.current.copy(
-                    color = WonderBeeTheme.materialScheme.onBackground
-                ),
-
-                colors = OutlinedTextFieldDefaults.colors(
-
-                    focusedContainerColor =
-                        WonderBeeTheme.extendedDesign.surfaceBackground,
-
-                    unfocusedContainerColor =
-                        WonderBeeTheme.extendedDesign.surfaceBackground,
-
-                    focusedBorderColor =
-                        WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
-
-                    unfocusedBorderColor =
-                        WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
-
-                    cursorColor =
-                        WonderBeeTheme.materialScheme.primary
                 )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            FloatingActionButton(
-
-                onClick = {
-
-                    if (messageText.isNotBlank() &&
-                        currentUserId.isNotEmpty()
-                    ) {
-
-                        val outgoingText = messageText
-
-                        messageText = ""
-
-                        scope.launch {
-
-                            try {
-
-                                val messageRef =
-                                    Firebase.database(databaseUrl)
+                Spacer(modifier = Modifier.width(8.dp))
+                FloatingActionButton(
+                    onClick = {
+                        if (messageText.isNotBlank() && currentUserId.isNotEmpty()) {
+                            val outgoingText = messageText
+                            messageText = ""
+                            scope.launch {
+                                try {
+                                    val messageRef = Firebase.database(databaseUrl)
                                         .reference("chats_messages")
                                         .child(roomId)
                                         .push()
-
-                                val newMessage =
-                                    FirebaseMessageModel(
+                                    val newMessage = FirebaseMessageModel(
                                         id = messageRef.key ?: "",
                                         text = outgoingText,
                                         senderId = currentUserId
                                     )
-
-                                messageRef.setValue(newMessage)
-
-                            } catch (e: Exception) {
-
-                                Napier.e(
-                                    "Transmission failed: ${e.message}"
-                                )
+                                    messageRef.setValue(newMessage)
+                                } catch (e: Exception) {
+                                    Napier.e("Transmission failed: ${e.message}")
+                                }
                             }
                         }
-                    }
-                },
-
-                modifier = Modifier.background(
-                    brush = WonderBeeTheme
-                        .extendedDesign
-                        .primaryGradientBrush,
-                    shape = FloatingActionButtonDefaults.shape
-                ),
-
-                containerColor = Color.Transparent,
-
-                elevation = FloatingActionButtonDefaults.elevation(0.dp)
-            ) {
-
-                Icon(
-                    imageVector = Icons.Default.Send,
-                    contentDescription = null,
-                    tint = Color.White
-                )
+                    },
+                    modifier = Modifier.background(
+                        brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                        shape = FloatingActionButtonDefaults.shape
+                    ),
+                    containerColor = Color.Transparent,
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = null,
+                        tint = Color.White
+                    )
+                }
             }
         }
     }
 
-//    Column(
-//        modifier = Modifier
-//            .fillMaxSize()
-//            .background(Color.Transparent)
-//    ) {
-//        Row(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .background(WonderBeeTheme.extendedDesign.primaryGradientBrush)
-//                .padding(horizontal = 16.dp, vertical = 14.dp),
-//            verticalAlignment = Alignment.CenterVertically
-//        )
-//        {
-//            Icon(
-//                imageVector = Icons.Default.ArrowBack,
-//                contentDescription = null,
-//                tint = WonderBeeTheme.materialScheme.onPrimary,
-//                modifier = Modifier.clickable { onBack() }
-//            )
-//
-//            Spacer(modifier = Modifier.width(12.dp))
-//
-//            Box(
-//                modifier = Modifier
-//                    .size(45.dp)
-//                    .clip(CircleShape)
-//                    .background(Color.Transparent),
-//                contentAlignment = Alignment.Center
-//            ) {
-//                if (chat.name.lowercase().contains("abdul")) {
-//                    Image(
-//                        painter = painterResource(Res.drawable.apj),
-//                        contentDescription = "Next button",
-//                        modifier = Modifier.size(60.dp).clickable(
-//                            interactionSource = remember { MutableInteractionSource() },
-//                            indication = null,
-//                            onClick = {
-//
-//                            }), contentScale = ContentScale.Crop
-//                    )
-//                } else if (chat.name.lowercase().contains("unicorn")) {
-//                    Image(
-//                        painter = painterResource(Res.drawable.unicorn),
-//                        contentDescription = "Next button",
-//                        modifier = Modifier.size(60.dp).clickable(
-//                            interactionSource = remember { MutableInteractionSource() },
-//                            indication = null,
-//                            onClick = {
-//
-//                            }), contentScale = ContentScale.Crop
-//                    )
-//                }
-//            }
-//
-//            Spacer(modifier = Modifier.width(12.dp))
-//
-//            Text(
-//                text = chat.name,
-//                color = Color.White,
-//                fontWeight = FontWeight.Bold,
-//                fontSize = 18.sp
-//            )
-//        }
-//
-//        Column(
-//            modifier = Modifier
-//                .fillMaxSize()
-//                .background(WonderBeeTheme.extendedDesign.surfaceBackground)
-//        )
-//        {
-//            // TOP HEADER BAR
-//
-//
-//            // REALTIME CHAT LIST
-//            LazyColumn(
-//                state = listState,
-//                modifier = Modifier
-//                    .weight(1f)
-//                    .padding(10.dp),
-//                verticalArrangement = Arrangement.Top
-//            ) {
-//                items(dbMessages) { msg ->
-//                    Box(
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .padding(vertical = 4.dp),
-//                        contentAlignment = if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
-//                    ) {
-//                        // 1. Assign backgrounds from the active theme matrix preferences
-//                        val bubbleBgColor = if (msg.isMe) {
-//                            // Sender gets Color 2 if custom overrides are active, otherwise falls back to system primary
-//                            if (ThemePreferencesManager.isCustomColorEnabled) ThemePreferencesManager.customColorEnd
-//                            else WonderBeeTheme.materialScheme.primary
-//                        } else {
-//                            // Receiver gets Color 1 if custom overrides are active, otherwise falls back to system secondary
-//                            if (ThemePreferencesManager.isCustomColorEnabled) ThemePreferencesManager.customColorStart
-//                            else WonderBeeTheme.materialScheme.secondary
-//                        }
-//
-//                        // 2. KMP-safe luminance calculation to keep reading text high-contrast and legible
-//                        val luminance =
-//                            (0.299f * bubbleBgColor.red) + (0.587f * bubbleBgColor.green) + (0.114f * bubbleBgColor.blue)
-//                        val bubbleTextColor =
-//                            if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
-//
-//                        Card(
-//                            colors = CardDefaults.cardColors(
-//                                containerColor = bubbleBgColor
-//                            ),
-//                            shape = if (msg.isMe) {
-//                                // Sleek asymmetrical shape tailored for sender placement orientation
-//                                RoundedCornerShape(
-//                                    topStart = 16.dp,
-//                                    topEnd = 16.dp,
-//                                    bottomStart = 16.dp,
-//                                    bottomEnd = 2.dp
-//                                )
-//                            } else {
-//                                // Sleek asymmetrical shape tailored for receiver placement orientation
-//                                RoundedCornerShape(
-//                                    topStart = 16.dp,
-//                                    topEnd = 16.dp,
-//                                    bottomStart = 2.dp,
-//                                    bottomEnd = 16.dp
-//                                )
-//                            },
-//                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-//                        ) {
-//                            Text(
-//                                text = msg.text,
-//                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-//                                color = bubbleTextColor,
-//                                style = MaterialTheme.typography.bodyMedium
-//                            )
-//                        }
-//                    }
-//                }
-//            }
-//
-//
-//        }
-//
-//        Row(
-//            modifier = Modifier
-//                .imePadding(),
-//            verticalAlignment = Alignment.CenterVertically
-//        )
-//        {
-//            OutlinedTextField(
-//                value = messageText,
-//                onValueChange = { messageText = it },
-//                placeholder = {
-//                    Text(
-//                        text = "Type message...",
-//                        // Blends text smoothly against your theme layout color
-//                        color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.5f)
-//                    )
-//                },
-//                shape = RoundedCornerShape(30.dp),
-//                textStyle = LocalTextStyle.current.copy(
-//                    color = WonderBeeTheme.materialScheme.onBackground
-//                ),
-//                colors = OutlinedTextFieldDefaults.colors(
-//                    // ✅ Sets your solid layout token directly inside the container color properties
-//                    focusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-//                    unfocusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-//
-//                    // Match borders to your defined focused/unfocused system theme lines
-//                    focusedBorderColor = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
-//                    unfocusedBorderColor = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
-//
-//                    // Sync cursor indicator to your primary accent selection point
-//                    cursorColor = WonderBeeTheme.materialScheme.primary
-//                )
-//            )
-//
-//
-//
-//            Spacer(modifier = Modifier.width(8.dp))
-//
-//            FloatingActionButton(
-//                onClick = {
-//                    if (messageText.isNotBlank() && currentUserId.isNotEmpty()) {
-//                        val outgoingText = messageText
-//                        messageText = ""
-//
-//                        scope.launch {
-//                            try {
-//                                val messageRef = Firebase.database(databaseUrl)
-//                                    .reference("chats_messages")
-//                                    .child(roomId)
-//                                    .push()
-//
-////                                val newMessage = FirebaseMessageModel(
-////                                    id = messageRef.key ?: "",
-////                                    text = outgoingText,
-////                                    senderId = currentUserId,
-////                                    isMe = true,
-////                                    // ✅ FIX 3: Replaced local TimeSource with platform-agnostic millisecond clock
-////                                    timestamp = TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds
-////                                )
-//
-//                                val newMessage = FirebaseMessageModel(
-//                                    id = messageRef.key ?: "",
-//                                    text = outgoingText,
-//                                    senderId = currentUserId
-//                                )
-//
-//                                messageRef.setValue(newMessage)
-//                            } catch (e: Exception) {
-//                                Napier.e("Transmission failed writing message record: ${e.message}")
-//                            }
-//                        }
-//                    }
-//                },
-//
-//                modifier = Modifier
-//                    .background(
-//                        brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
-//                        shape = FloatingActionButtonDefaults.shape
-//                    ),
-//                containerColor = Color.Transparent,
-//                elevation = FloatingActionButtonDefaults.elevation(0.dp)
-//            ) {
-//                Icon(
-//                    imageVector = Icons.Default.Send,
-//                    contentDescription = null,
-//                    tint = Color.White
-//                )
-//            }
-//        }
-//
-//    }
 }

@@ -45,6 +45,7 @@ import com.example.drbee.Helper.BeeAmberGold
 import com.example.drbee.Helper.BeeBrightYellow
 import com.example.drbee.Helper.BeeDarkNavy
 import com.example.drbee.Helper.BeeMutedGold
+import com.example.drbee.Helper.SessionManager
 import kotlinx.coroutines.launch
 import theme.AppColors.GradientEnd
 import theme.AppColors.GradientStart
@@ -196,6 +197,7 @@ fun LoginScreen(
                 scope.launch {
                     val result = authRepository.login(email, password)
                     result.onSuccess {
+                        SessionManager.saveLoginState(true)
                         onLoginSuccess()
                     }
                     result.onFailure { exception ->
