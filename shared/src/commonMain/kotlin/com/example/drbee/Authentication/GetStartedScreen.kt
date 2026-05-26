@@ -67,6 +67,7 @@ fun GetStartedScreen(onGetStarted: () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .background(Color.Black)
         )
         {
@@ -205,7 +206,6 @@ fun splashScreen() {
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .navigationBarsPadding()
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
@@ -213,7 +213,7 @@ fun splashScreen() {
         Image(
             painter = painterResource(Res.drawable.bee_doc),
             contentDescription = "Logo",
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxWidth()
         )
     }
