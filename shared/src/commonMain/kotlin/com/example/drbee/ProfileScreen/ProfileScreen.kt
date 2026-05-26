@@ -36,7 +36,6 @@ import androidx.navigation.NavController
 import com.example.drbee.ChatActivity.FirebaseChatModel
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
-import com.example.drbee.Routes
 import com.example.drbee.decodeBase64ToImageBitmap
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth

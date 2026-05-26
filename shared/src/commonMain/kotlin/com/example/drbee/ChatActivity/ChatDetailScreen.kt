@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,6 +53,7 @@ import com.example.drbee.Helper.SessionManager
 import com.example.drbee.NotificationService
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
+import com.example.drbee.decodeBase64ToImageBitmap
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
@@ -59,9 +61,11 @@ import drbee.shared.generated.resources.Res
 import drbee.shared.generated.resources.apj
 import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,10 +79,20 @@ fun ChatDetailScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    // ✅ Uses expect/actual — no Android import needed
     val notificationService = remember { NotificationService() }
-
     var currentUserId by remember { mutableStateOf("") }
+
+    // ✅ Decode profile image from base64
+    var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(chat.profileImage) {
+        val base64 = chat.profileImage.orEmpty()
+        profileBitmap = if (base64.isNotEmpty()) {
+            withContext(Dispatchers.Default) {
+                decodeBase64ToImageBitmap(base64)
+            }
+        } else null
+    }
 
     LaunchedEffect(Unit) {
         currentUserId = when {
@@ -92,6 +106,7 @@ fun ChatDetailScreen(
 
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
+    // ✅ Correct 1-to-1 room ID — alphabetical sort guarantees same ID for both users
     val roomId = remember(currentUserId, chat.id) {
         val id1 = currentUserId.lowercase()
         val id2 = chat.id.lowercase()
@@ -152,27 +167,44 @@ fun ChatDetailScreen(
                     modifier = Modifier.clickable { onBack() }
                 )
                 Spacer(modifier = Modifier.width(12.dp))
+
+                // ✅ Dynamic profile image from base64
                 Box(
-                    modifier = Modifier.size(45.dp).clip(CircleShape),
+                    modifier = Modifier
+                        .size(45.dp)
+                        .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    when {
-                        chat.name.lowercase().contains("abdul") ->
-                            Image(
-                                painter = painterResource(Res.drawable.apj),
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                    if (profileBitmap != null) {
+                        Image(
+                            bitmap = profileBitmap!!,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(45.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // ✅ Fallback: show first letter of name
+                        Box(
+                            modifier = Modifier
+                                .size(45.dp)
+                                .background(
+                                    color = Color.White.copy(alpha = 0.3f),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = chat.name.take(1).uppercase(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
                             )
-                        chat.name.lowercase().contains("unicorn") ->
-                            Image(
-                                painter = painterResource(Res.drawable.unicorn),
-                                contentDescription = null,
-                                modifier = Modifier.size(60.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
+                        }
                     }
                 }
+
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = chat.name,
@@ -279,7 +311,6 @@ fun ChatDetailScreen(
 
                             scope.launch {
                                 try {
-                                    // ✅ 1: Save message to Firebase
                                     val messageRef = Firebase.database(databaseUrl)
                                         .reference("chats_messages")
                                         .child(roomId)
@@ -292,7 +323,6 @@ fun ChatDetailScreen(
                                     )
                                     messageRef.setValue(newMessage)
 
-                                    // ✅ 2: Get sender name from DB
                                     val senderSnapshot = Firebase.database(databaseUrl)
                                         .reference("users")
                                         .child(currentUserId)
@@ -303,7 +333,6 @@ fun ChatDetailScreen(
                                     val senderName =
                                         (senderSnapshot.value as? String) ?: chat.name
 
-                                    // ✅ 3: Send push notification via expect/actual
                                     notificationService.sendPushNotification(
                                         recipientUserId = chat.id,
                                         senderName = senderName,

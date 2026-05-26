@@ -88,6 +88,7 @@ kotlin {
 
             implementation("org.jetbrains.compose.ui:ui-graphics:1.6.11")
 
+            implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.0")
 
 
         }
