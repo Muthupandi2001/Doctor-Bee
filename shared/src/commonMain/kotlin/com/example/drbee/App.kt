@@ -47,7 +47,9 @@ fun App(
     onShareRequested: (String) -> Unit,
     onPickImageRequested: ((String) -> Unit) -> Unit,
     // Android side passes a lambda that decodes Base64 → ImageBitmap (no android.* in commonMain)
-    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit
+    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit,
+    onUserLoggedIn: (uid: String) -> Unit   // ✅ NEW
+
 ) {
     val navController = rememberNavController()
     val auth = remember { Firebase.auth }
@@ -100,12 +102,40 @@ fun App(
                 })
             }
 
+//            composable(Routes.LOGIN) {
+//                LoginScreen(
+//                    navController = navController,
+//                    onLoginSuccess = {
+//                        val firebaseUser = Firebase.auth.currentUser
+//                        SessionManager.saveUserID(userId = firebaseUser?.uid ?: "")
+//                        navController.navigate(Routes.ONBOARDING) {
+//                            popUpTo(Routes.GET_STARTED) { inclusive = true }
+//                            launchSingleTop = true
+//                        }
+//                    },
+//                    onNavigateToSignup = {
+//                        navController.navigate(Routes.SIGNUP) { launchSingleTop = true }
+//                    }
+//                )
+//            }
+//
+//            composable(Routes.SIGNUP) {
+//                SignupScreen(onNavigateToLogin = { navController.navigate(Routes.LOGIN) })
+//            }
+
+
             composable(Routes.LOGIN) {
                 LoginScreen(
                     navController = navController,
                     onLoginSuccess = {
-                        val firebaseUser = Firebase.auth.currentUser
-                        SessionManager.saveUserID(userId = firebaseUser?.uid ?: "")
+                        val uid = Firebase.auth.currentUser?.uid ?: ""
+                        SessionManager.saveUserID(userId = uid)
+                        SessionManager.isFreshLogin = true
+                        SessionManager.saveLoginState(true)
+
+                        // ✅ Save FCM token — crosses to Android side
+                        if (uid.isNotBlank()) onUserLoggedIn(uid)
+
                         navController.navigate(Routes.ONBOARDING) {
                             popUpTo(Routes.GET_STARTED) { inclusive = true }
                             launchSingleTop = true
@@ -118,7 +148,15 @@ fun App(
             }
 
             composable(Routes.SIGNUP) {
-                SignupScreen(onNavigateToLogin = { navController.navigate(Routes.LOGIN) })
+                SignupScreen(
+                    onNavigateToLogin = {
+                        navController.navigate(Routes.LOGIN)
+                    },
+                    // ✅ Called right after user is created in Firebase
+                    onSignupSuccess = { uid ->
+                        onUserLoggedIn(uid)
+                    }
+                )
             }
 
             composable(Routes.DASHBOARD) { DashboardScreen() }

@@ -30,7 +30,9 @@ import dev.gitlive.firebase.database.database
 
 @Composable
 fun SignupScreen(
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onSignupSuccess: (uid: String) -> Unit   // ✅ NEW
+
 ) {
     val authRepository = remember { AuthRepository() }
     val scope = rememberCoroutineScope()
@@ -215,7 +217,7 @@ fun SignupScreen(
                                             .reference("users")
                                             .child(userId)
                                             .setValue(newUserMap)
-
+                                        onSignupSuccess(userId)
                                         message = "Signup Success"
                                         onNavigateToLogin()
                                     } else {

@@ -21,10 +21,10 @@ fun main() {
 
     Firebase.initialize(options = webOptions)
 
-    // ✅ Parse deep link params from the browser URL query string
-    val urlParams   = URLSearchParams(window.location.search)
-    val screen      = urlParams.get("screen")
-    val referrerId  = urlParams.get("referrerId")
+    // ✅ Parse deep link params from browser URL
+    val urlParams  = URLSearchParams(window.location.search)
+    val screen     = urlParams.get("screen")
+    val referrerId = urlParams.get("referrerId")
 
     val deepLinkParams = if (!screen.isNullOrBlank() || !referrerId.isNullOrBlank()) {
         DeepLinkParams(screen = screen, referrerId = referrerId)
@@ -34,22 +34,40 @@ fun main() {
 
     ComposeViewport(document.body!!) {
         App(
-            deepLinkParams   = deepLinkParams,        // ✅ parsed from browser URL
+            deepLinkParams = deepLinkParams,
+
+            // ✅ Web share — no Android Context needed
             onShareRequested = { userId ->
-                shareReferralLinkWeb(userId)          // ✅ no 'this' needed on web
+                shareReferralLinkWeb(userId)
+            },
+
+            // ✅ Web has no native image picker — no-op stub
+            onPickImageRequested = { _ ->
+                // Not supported on web in this KMP setup
+                console.warn("Image picking not supported on web")
+            },
+
+            // ✅ Web has no BitmapFactory — no-op stub, always returns null
+            onDecodeImageRequested = { _, onResult ->
+                onResult(null)
+            },
+
+            // ✅ Web has no FCM token saving — no-op stub
+            // FCM for web requires a separate Service Worker setup
+            onUserLoggedIn = { uid ->
+                console.log("Web login: uid=$uid (FCM web push not configured)")
             }
         )
     }
 }
 
 fun shareReferralLinkWeb(userId: String) {
-    val baseUrl          = "https://creative-bunny-e05f99.netlify.app"
-    val fullReferralUrl  = "$baseUrl?screen=referral&referrerId=$userId"
-    val shareText        = "Hey! Join DrBee using my invitation link: $fullReferralUrl"
-    val shareTitle       = "Join DrBee App!"
+    val baseUrl         = "https://creative-bunny-e05f99.netlify.app"
+    val fullReferralUrl = "$baseUrl?screen=referral&referrerId=$userId"
+    val shareText       = "Hey! Join DrBee using my invitation link: $fullReferralUrl"
+    val shareTitle      = "Join DrBee App!"
 
     if (js("typeof navigator.share !== 'undefined'") as Boolean) {
-        // ✅ Pass variables safely into JS — don't reference Kotlin vars inside js() string
         val shareData = js("({})")
         shareData.title = shareTitle
         shareData.text  = shareText
@@ -61,7 +79,7 @@ fun shareReferralLinkWeb(userId: String) {
     }
 }
 
-// ✅ KMP-safe URLSearchParams wrapper — no extra library needed
+// ✅ KMP-safe URLSearchParams wrapper
 external class URLSearchParams(init: String) {
     fun get(name: String): String?
 }

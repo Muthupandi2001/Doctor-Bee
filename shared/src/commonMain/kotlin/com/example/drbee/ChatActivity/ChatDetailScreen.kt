@@ -3,21 +3,17 @@ package com.example.drbee.ChatActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -53,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.drbee.Helper.SessionManager
+import com.example.drbee.NotificationService
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 import dev.gitlive.firebase.Firebase
@@ -62,6 +59,7 @@ import drbee.shared.generated.resources.Res
 import drbee.shared.generated.resources.apj
 import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -72,53 +70,39 @@ fun ChatDetailScreen(
     chat: FirebaseChatModel,
     onBack: () -> Unit
 ) {
-
     var messageText by remember { mutableStateOf("") }
     var dbMessages by remember { mutableStateOf<List<FirebaseMessageModel>>(emptyList()) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
+    // ✅ Uses expect/actual — no Android import needed
+    val notificationService = remember { NotificationService() }
+
     var currentUserId by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-
         currentUserId = when {
             Firebase.auth.currentUser?.uid?.isNotBlank() == true ->
                 Firebase.auth.currentUser?.uid ?: ""
-
             SessionManager.savedUserId.isNotBlank() ->
                 SessionManager.savedUserId
-
             else -> ""
         }
     }
 
-
-    // ✅ FIX 1: Explicit trailing forward slash ensures regional sharding routing matches across targets
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
-    // ✅ FIX 2: Normalized lowercase sorting handles web engine variations
     val roomId = remember(currentUserId, chat.id) {
         val id1 = currentUserId.lowercase()
         val id2 = chat.id.lowercase()
         if (id1 < id2) "${id1}_${id2}" else "${id2}_${id1}"
     }
 
-    val avatarColor = remember(chat.colorHex) {
-        try {
-            Color(chat.colorHex.removePrefix("#").toLong(16) or 0xFF000000)
-        } catch (e: Exception) {
-            Color(0xFF075E54)
-        }
-    }
-
-
     LaunchedEffect(dbMessages.size) {
         if (dbMessages.isNotEmpty()) {
             listState.animateScrollToItem(dbMessages.size - 1)
         }
     }
-
 
     LaunchedEffect(roomId) {
         try {
@@ -130,39 +114,30 @@ fun ChatDetailScreen(
                     dataSnapshot.children.mapNotNull { childSnapshot ->
                         try {
                             val msg = childSnapshot.value<FirebaseMessageModel>()
-                            val isMessageSentByMe = msg.senderId == currentUserId
-
                             msg.copy(
                                 id = childSnapshot.key ?: "",
-                                isMe = isMessageSentByMe
+                                isMe = msg.senderId == currentUserId
                             )
                         } catch (e: Exception) {
-                            Napier.e("Failed to deserialize message object structure: ${e.message}")
+                            Napier.e("Deserialize error: ${e.message}")
                             null
                         }
                     }
-                    // ✅ Note: Messages stream in Firebase order since sorting is removed
                 }
-                .collect { fetchedMessages ->
-                    dbMessages = fetchedMessages
-                }
+                .collect { fetchedMessages -> dbMessages = fetchedMessages }
         } catch (e: Exception) {
-            Napier.e("Message websocket stream connection lost: ${e.message}")
+            Napier.e("Stream error: ${e.message}")
         }
     }
-
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(WonderBeeTheme.extendedDesign.surfaceBackground)) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
+            .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
 
-            // =========================
-            // TOP HEADER
-            // =========================
+            // ── TOP HEADER ──────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -178,25 +153,24 @@ fun ChatDetailScreen(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Box(
-                    modifier = Modifier
-                        .size(45.dp)
-                        .clip(CircleShape),
+                    modifier = Modifier.size(45.dp).clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (chat.name.lowercase().contains("abdul")) {
-                        Image(
-                            painter = painterResource(Res.drawable.apj),
-                            contentDescription = null,
-                            modifier = Modifier.size(60.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else if (chat.name.lowercase().contains("unicorn")) {
-                        Image(
-                            painter = painterResource(Res.drawable.unicorn),
-                            contentDescription = null,
-                            modifier = Modifier.size(60.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                    when {
+                        chat.name.lowercase().contains("abdul") ->
+                            Image(
+                                painter = painterResource(Res.drawable.apj),
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        chat.name.lowercase().contains("unicorn") ->
+                            Image(
+                                painter = painterResource(Res.drawable.unicorn),
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -208,13 +182,11 @@ fun ChatDetailScreen(
                 )
             }
 
-            // =========================
-            // CHAT LIST — takes all remaining space
-            // =========================
+            // ── CHAT LIST ────────────────────────────
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .weight(1f)          // ✅ Fills space between header and input bar
+                    .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp),
                 verticalArrangement = Arrangement.Bottom
@@ -224,44 +196,40 @@ fun ChatDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp),
-                        contentAlignment = if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
+                        contentAlignment =
+                            if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
                     ) {
                         val bubbleBgColor = if (msg.isMe) {
                             if (ThemePreferencesManager.isCustomColorEnabled)
                                 ThemePreferencesManager.customColorEnd
-                            else
-                                WonderBeeTheme.materialScheme.primary
+                            else WonderBeeTheme.materialScheme.primary
                         } else {
                             if (ThemePreferencesManager.isCustomColorEnabled)
                                 ThemePreferencesManager.customColorStart
-                            else
-                                WonderBeeTheme.materialScheme.secondary
+                            else WonderBeeTheme.materialScheme.secondary
                         }
 
                         val luminance = (0.299f * bubbleBgColor.red) +
                                 (0.587f * bubbleBgColor.green) +
                                 (0.114f * bubbleBgColor.blue)
 
-                        val bubbleTextColor = if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
+                        val bubbleTextColor =
+                            if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
 
                         Card(
                             colors = CardDefaults.cardColors(containerColor = bubbleBgColor),
-                            shape = if (msg.isMe) {
-                                RoundedCornerShape(
-                                    topStart = 16.dp, topEnd = 16.dp,
-                                    bottomStart = 16.dp, bottomEnd = 2.dp
-                                )
-                            } else {
-                                RoundedCornerShape(
-                                    topStart = 16.dp, topEnd = 16.dp,
-                                    bottomStart = 2.dp, bottomEnd = 16.dp
-                                )
-                            },
+                            shape = if (msg.isMe)
+                                RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp)
+                            else
+                                RoundedCornerShape(16.dp, 16.dp, 16.dp, 2.dp),
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
                             Text(
                                 text = msg.text,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(
+                                    horizontal = 14.dp,
+                                    vertical = 10.dp
+                                ),
                                 color = bubbleTextColor,
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -270,9 +238,7 @@ fun ChatDetailScreen(
                 }
             }
 
-            // =========================
-            // BOTTOM MESSAGE BAR
-            // =========================
+            // ── BOTTOM MESSAGE BAR ───────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -304,25 +270,50 @@ fun ChatDetailScreen(
                     )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
+
                 FloatingActionButton(
                     onClick = {
                         if (messageText.isNotBlank() && currentUserId.isNotEmpty()) {
                             val outgoingText = messageText
                             messageText = ""
+
                             scope.launch {
                                 try {
+                                    // ✅ 1: Save message to Firebase
                                     val messageRef = Firebase.database(databaseUrl)
                                         .reference("chats_messages")
                                         .child(roomId)
                                         .push()
+
                                     val newMessage = FirebaseMessageModel(
                                         id = messageRef.key ?: "",
                                         text = outgoingText,
                                         senderId = currentUserId
                                     )
                                     messageRef.setValue(newMessage)
+
+                                    // ✅ 2: Get sender name from DB
+                                    val senderSnapshot = Firebase.database(databaseUrl)
+                                        .reference("users")
+                                        .child(currentUserId)
+                                        .child("name")
+                                        .valueEvents
+                                        .first()
+
+                                    val senderName =
+                                        (senderSnapshot.value as? String) ?: chat.name
+
+                                    // ✅ 3: Send push notification via expect/actual
+                                    notificationService.sendPushNotification(
+                                        recipientUserId = chat.id,
+                                        senderName = senderName,
+                                        messageText = outgoingText,
+                                        senderId = currentUserId,
+                                        roomId = roomId
+                                    )
+
                                 } catch (e: Exception) {
-                                    Napier.e("Transmission failed: ${e.message}")
+                                    Napier.e("Send failed: ${e.message}")
                                 }
                             }
                         }
@@ -343,5 +334,4 @@ fun ChatDetailScreen(
             }
         }
     }
-
 }

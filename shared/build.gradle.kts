@@ -42,11 +42,19 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(project.dependencies.platform("com.google.firebase:firebase-bom:33.1.0"))
+
+            implementation("com.google.firebase:firebase-messaging:25.0.2")
+            implementation("com.google.auth:google-auth-library-oauth2-http:1.47.0")
         }
 
         commonMain.dependencies {
             implementation("dev.gitlive:firebase-auth:2.4.0")
             implementation("dev.gitlive:firebase-database:2.4.0")
+
+//            implementation("com.google.firebase:firebase-messaging:24.0.0")
+//
+//            // Google Auth (for OAuth2 / service account)
+//            implementation("com.google.auth:google-auth-library-oauth2-http:1.23.0")
 
 
             // CLEANED: Removed the deprecated ui-backhandler line to prevent runtime crashes!

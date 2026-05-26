@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
@@ -21,12 +22,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
@@ -34,27 +36,38 @@ import java.io.InputStream
 class MainActivity : ComponentActivity() {
 
     var deepLinkParams by mutableStateOf<DeepLinkParams?>(null)
-        private set
+
+    companion object {
+        const val DB_URL = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) fetchAndStoreFcmToken()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         processIntent(intent)
+        NotificationService.appContext = applicationContext
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = android.graphics.Color.BLACK
 
         enableEdgeToEdge(
-            statusBarStyle     = SystemBarStyle.dark("#000000".toColorInt()),
+            statusBarStyle = SystemBarStyle.dark("#000000".toColorInt()),
             navigationBarStyle = SystemBarStyle.dark("#000000".toColorInt())
         )
+
+        requestNotificationPermission()
+        handleNotificationIntent(intent)
 
         setContent {
             var showDialog by remember { mutableStateOf(false) }
             var onImageProcessedCallback by remember { mutableStateOf<((String) -> Unit)?>(null) }
             var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
 
-            // Compress + encode to Base64 — Android-only, lives here in androidMain
             val processAndCompressImage: (Uri?) -> Unit = { uri ->
                 if (uri != null) {
                     try {
@@ -90,8 +103,8 @@ class MainActivity : ComponentActivity() {
             if (showDialog) {
                 AlertDialog(
                     onDismissRequest = { showDialog = false },
-                    title   = { Text("Select Profile Photo") },
-                    text    = { Text("Choose a source to upload your profile image.") },
+                    title = { Text("Select Profile Photo") },
+                    text = { Text("Choose a source to upload your profile image.") },
                     confirmButton = {
                         TextButton(onClick = {
                             showDialog = false
@@ -101,9 +114,12 @@ class MainActivity : ComponentActivity() {
                     dismissButton = {
                         TextButton(onClick = {
                             showDialog = false
-                            val tempFile = File.createTempFile("avatar_capture", ".jpg", cacheDir)
+                            val tempFile =
+                                File.createTempFile("avatar_capture", ".jpg", cacheDir)
                             val uri = FileProvider.getUriForFile(
-                                this@MainActivity, "$packageName.fileprovider", tempFile
+                                this@MainActivity,
+                                "$packageName.fileprovider",
+                                tempFile
                             )
                             cameraImageUri = uri
                             if (ContextCompat.checkSelfPermission(
@@ -126,16 +142,20 @@ class MainActivity : ComponentActivity() {
                     onImageProcessedCallback = callback
                     showDialog = true
                 },
-                // ✅ Base64 → ImageBitmap decoding lives here — android.* is fine in androidMain
                 onDecodeImageRequested = { base64String, onResult ->
                     try {
-                        val bytes  = Base64.decode(base64String, Base64.NO_WRAP)
+                        val bytes = Base64.decode(base64String, Base64.NO_WRAP)
                         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                         onResult(bitmap?.asImageBitmap())
                     } catch (e: Exception) {
                         e.printStackTrace()
                         onResult(null)
                     }
+                },
+                // ✅ Called from commonMain after every login or signup
+                onUserLoggedIn = { uid ->
+                    FcmTokenHelper.saveTokenForUser(uid)
+                    MyFCMService.flushPendingToken(uid)
                 }
             )
         }
@@ -144,6 +164,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         processIntent(intent)
+        handleNotificationIntent(intent)
     }
 
     private fun processIntent(intent: Intent?) {
@@ -151,12 +172,16 @@ class MainActivity : ComponentActivity() {
         if (data != null) {
             when {
                 data.scheme == "drbee" && data.host == "open" -> {
-                    val screen     = data.getQueryParameter("screen")
+                    val screen = data.getQueryParameter("screen")
                     val referrerId = data.getQueryParameter("referrerId")
                     Log.d("DrBeeDeepLink", "screen=$screen, referrerId=$referrerId")
                     deepLinkParams = DeepLinkParams(screen, referrerId)
                     if (screen == "referral" && referrerId != null) {
-                        Toast.makeText(this, "Welcome! Referred by: $referrerId", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Welcome! Referred by: $referrerId",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
                 else -> deepLinkParams = null
@@ -167,12 +192,39 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun shareReferralLink(context: Context, userId: String) {
-        val fullUrl = "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
+        val fullUrl =
+            "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_SUBJECT, "Join DrBee App!")
             putExtra(Intent.EXTRA_TEXT, "Hey! Join DrBee: $fullUrl")
         }
         context.startActivity(Intent.createChooser(shareIntent, "Share Link Via"))
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            fetchAndStoreFcmToken()
+        }
+    }
+
+    private fun fetchAndStoreFcmToken() {
+        FirebaseMessaging.getInstance().token
+            .addOnSuccessListener { token ->
+                val uid = FirebaseAuth.getInstance().currentUser?.uid
+                if (!uid.isNullOrBlank()) {
+                    MyFCMService.saveTokenToDatabase(uid, token)
+                } else {
+                    MyFCMService.pendingToken = token
+                }
+            }
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val senderId = intent?.getStringExtra("OPEN_SENDER_ID") ?: return
+        val roomId = intent.getStringExtra("OPEN_ROOM_ID") ?: return
+        Log.d("FCM", "Notification tapped: senderId=$senderId roomId=$roomId")
     }
 }
