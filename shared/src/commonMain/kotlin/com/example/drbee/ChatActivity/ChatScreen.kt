@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,11 +16,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +33,7 @@ import com.example.drbee.MainScreen.BottomTab
 import com.example.drbee.MainScreen.applyGradientTint
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
+import com.example.drbee.decodeBase64ToImageBitmap
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
@@ -38,12 +42,15 @@ import drbee.shared.generated.resources.apj
 import drbee.shared.generated.resources.ic_next_button_rounded
 import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.datetime.Clock
 import org.jetbrains.compose.resources.painterResource
+import theme.AppStrings.TRACK_GOAL_TITLE
 import kotlin.text.contains
 import kotlin.time.TimeSource
 
@@ -62,7 +69,6 @@ fun ChatActivity() {
     val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
 
-
     Napier.d(currentUid + "currentUid:::")
 
     LaunchedEffect(currentUid) {
@@ -72,21 +78,6 @@ fun ChatActivity() {
             SessionManager.isLoggedIn -> SessionManager.savedUserId
             else -> ""
         }
-
-//        if (currentUid.isBlank()) {
-//            // If it's truly blank (and initialization settled), fallback to local cache instead of wiping
-//            if (SessionManager.isLoggedIn) {
-//                currentUid_local = SessionManager.savedUserId.get()
-//            } else {
-//                currentUid_local = "Anonymous User"
-//            }
-//
-//
-//
-//            isLoading = false
-//            return@LaunchedEffect
-//        }
-
 
         try {
             Firebase.database(databaseUrl)
@@ -148,6 +139,22 @@ fun ChatListScreen(
     chatList: List<FirebaseChatModel>,
     onChatClick: (FirebaseChatModel) -> Unit
 ) {
+
+
+    val masterScrollState = rememberScrollState()
+
+    var currentImageBase64 by remember { mutableStateOf("") }
+    var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+// 1. Safe extraction: Check if chat list has data and extract string safely
+//    val primaryChatUser = chatList.isNotEmpty()
+
+    val currentId = SessionManager.savedUserId
+
+
+
+
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -159,9 +166,37 @@ fun ChatListScreen(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(start = 20.dp, top = 50.dp, bottom = 16.dp)
         )
+        val auth = remember { Firebase.auth }
+        val currentUid = auth.currentUser?.uid ?: ""
+
+        val currentUid_local = remember(currentUid) {
+            when {
+                currentUid.isNotBlank() -> currentUid
+                SessionManager.isLoggedIn -> SessionManager.savedUserId
+                else -> ""
+            }
+        }
 
         LazyColumn {
             items(chatList) { firebaseChat ->
+
+                // 1. Check if this specific row belongs to the current user
+                val isCurrentUser = firebaseChat.id == currentUid_local
+
+                // 2. Decode the Base64 image ONLY for this specific user row independently
+                var rowBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+
+                LaunchedEffect(firebaseChat.profileImage) {
+                    val base64String = firebaseChat.profileImage.orEmpty()
+                    if (base64String.isNotEmpty()) {
+                        // Decodes in background thread to prevent UI lag
+                        rowBitmap = withContext(Dispatchers.Default) {
+                            decodeBase64ToImageBitmap(base64String)
+                        }
+                    } else {
+                        rowBitmap = null
+                    }
+                }
 
                 val parsedColor = remember(firebaseChat.colorHex) {
                     try {
@@ -192,49 +227,37 @@ fun ChatListScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-//                        Box(
-//                            modifier = Modifier
-//                                .size(40.dp)
-//                                .clip(CircleShape)
-//                                .background(parsedColor),
-//                            contentAlignment = Alignment.Center
-//                        ) {
-//                            Text(
-//                                text = uiChatModel.name.firstOrNull()?.toString() ?: "?",
-//                                color = Color.White,
-//                                fontWeight = FontWeight.Bold
-//                            )
-//                        }
 
-
-                        if (uiChatModel.name.lowercase().contains("abdul")) {
-                            Image(
-                                painter = painterResource(Res.drawable.apj),
-                                contentDescription = "Next button",
-                                modifier = Modifier.size(60.dp).clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = {
-
-                                    }), contentScale = ContentScale.Crop
-                            )
-                        } else if (uiChatModel.name.lowercase().contains("unicorn")) {
-                            Image(
-                                painter = painterResource(Res.drawable.unicorn),
-                                contentDescription = "Next button",
-                                modifier = Modifier.size(60.dp).clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = {
-
-                                    }), contentScale = ContentScale.Crop
-                            )
-                        }
-
+                        // 3. Render the dynamic local row image
+              Box(modifier = Modifier.clip(RoundedCornerShape(40.dp))){
+                  if (rowBitmap != null) {
+                      Image(
+                          bitmap = rowBitmap!!,
+                          contentDescription = TRACK_GOAL_TITLE,
+                          modifier = Modifier
+                              .size(60.dp), // Reduced from 300.dp to look proper in a list item row
+                          contentScale = ContentScale.Crop
+                      )
+                  } else {
+                      // Fallback placeholder when no profile image exists
+                      Box(
+                          modifier = Modifier
+                              .size(60.dp)
+                              .background(Color.LightGray, shape = CircleShape),
+                          contentAlignment = Alignment.Center
+                      ) {
+                          Text(
+                              text = uiChatModel.name.take(1).uppercase(),
+                              color = Color.White,
+                              fontWeight = FontWeight.Bold
+                          )
+                      }
+                  }
+              }
 
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column {
 
+                        Column {
                             Text(
                                 text = uiChatModel.name,
                                 style = TextStyle(
@@ -244,7 +267,6 @@ fun ChatListScreen(
                                 )
                             )
 
-
                             Text(
                                 text = uiChatModel.message,
                                 style = TextStyle(
@@ -253,13 +275,12 @@ fun ChatListScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                             )
-//                            Text(text = uiChatModel.name, fontWeight = FontWeight.Bold)
-//                            Text(text = uiChatModel.message, color = Color.Gray, fontSize = 14.sp)
                         }
                     }
                 }
             }
         }
+
     }
 }
 

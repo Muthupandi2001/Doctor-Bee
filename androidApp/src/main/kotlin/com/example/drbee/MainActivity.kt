@@ -175,4 +175,5 @@ class MainActivity : ComponentActivity() {
         }
         context.startActivity(Intent.createChooser(shareIntent, "Share Link Via"))
     }
+
 }

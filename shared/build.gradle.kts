@@ -79,7 +79,8 @@ kotlin {
             implementation("io.coil-kt.coil3:coil-network-ktor:3.0.0-alpha06")
 
             implementation("org.jetbrains.compose.ui:ui-graphics:1.6.11")
-            implementation("org.jetbrains.skiko:skiko:0.8.4")
+
+
 
         }
 

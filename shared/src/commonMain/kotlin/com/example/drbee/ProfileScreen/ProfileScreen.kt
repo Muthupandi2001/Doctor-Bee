@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -36,6 +37,7 @@ import com.example.drbee.ChatActivity.FirebaseChatModel
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
 import com.example.drbee.Routes
+import com.example.drbee.decodeBase64ToImageBitmap
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
@@ -46,6 +48,7 @@ import io.github.aakira.napier.Napier
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import theme.AppStrings.TRACK_GOAL_TITLE
 
 
 @Composable
@@ -77,30 +80,32 @@ fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
 
     val masterScrollState = rememberScrollState()
 
-    LaunchedEffect(currentUid) {
+    var currentImageBase64 by remember {
+        mutableStateOf("")
+    }
 
-        val currentUid = when {
+    var profileBitmap by remember {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+
+
+
+    LaunchedEffect(currentUid) {
+        val targetedUid = when {
             currentUid.isNotBlank() -> currentUid
             SessionManager.isLoggedIn -> SessionManager.savedUserId
             else -> ""
         }
-//        if (currentUid.isBlank()) {
-//            // If it's truly blank (and initialization settled), fallback to local cache instead of wiping
-//            if (SessionManager.isLoggedIn) {
-//                userName = SessionManager.savedUserName.ifBlank { "Hive Member" }
-//                userEmail = SessionManager.savedUserEmail.ifBlank { "Syncing..." }
-//            } else {
-//                userName  = "Anonymous User"
-//                userEmail = "Not logged in"
-//            }
-//            isLoading = false
-//            return@LaunchedEffect
-//        }
+
+        if (targetedUid.isBlank()) {
+            isLoading = false
+            return@LaunchedEffect
+        }
 
         try {
             Firebase.database(databaseUrl)
                 .reference("users")
-                .child(currentUid)
+                .child(targetedUid)
                 .valueEvents
                 .collect { snapshot ->
                     if (snapshot.exists) {
@@ -110,26 +115,39 @@ fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
                         userName = profileData.name.ifBlank { "No Name Provided" }
                         userEmail = profileData.email.ifBlank { auth.currentUser?.email ?: "" }
 
-                        // ✅ Safely update cache with fresh data
+                        // ✅ Extract the Base64 image from the data model and assign it to the state
+                        currentImageBase64 = profileData.profileImage.orEmpty()
+
+                        // Update your SessionManager cache if you wish to store the image offline
                         SessionManager.saveUserData(
-                            userId = currentUid,
+                            userId = targetedUid,
                             email = userEmail,
                             name = userName
                         )
                     } else {
                         userName = "Hive Member"
                         userEmail = auth.currentUser?.email ?: "No Email Attached"
+                        currentImageBase64 = "" // Reset on empty profile
                     }
                     isLoading = false
                 }
         } catch (e: Exception) {
             Napier.e("Profile credential loading failure: ${e.message}")
             userName = SessionManager.savedUserName.ifBlank { "Offline Mode" }
-            userEmail =
-                SessionManager.savedUserEmail.ifBlank { auth.currentUser?.email ?: "Offline" }
+            userEmail = SessionManager.savedUserEmail.ifBlank { auth.currentUser?.email ?: "Offline" }
             isLoading = false
         }
     }
+
+    LaunchedEffect(currentImageBase64) {
+        if (currentImageBase64.isNotEmpty()) {
+            // Just call the global function directly!
+            profileBitmap = decodeBase64ToImageBitmap(currentImageBase64)
+        } else {
+            profileBitmap = null
+        }
+    }
+
 
     WonderBeeTheme(
         themeType = ThemePreferencesManager.currentAppThemeSelection,
@@ -161,20 +179,18 @@ fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
                     .background(Color.Transparent),
                 contentAlignment = Alignment.Center
             ) {
-                if (userName.lowercase().contains("abdul")) {
+
+
+                profileBitmap?.let {
+
                     Image(
-                        painter = painterResource(Res.drawable.apj),
-                        contentDescription = null,
-                        modifier = Modifier.size(100.dp),
+                        bitmap = it,
+                        contentDescription = TRACK_GOAL_TITLE,
+                        modifier = Modifier
+                            .size(300.dp),
                         contentScale = ContentScale.Crop
                     )
-                } else if (userName.lowercase().contains("unicorn")) {
-                    Image(
-                        painter = painterResource(Res.drawable.unicorn),
-                        contentDescription = null,
-                        modifier = Modifier.size(100.dp),
-                        contentScale = ContentScale.Crop
-                    )
+
                 }
             }
 
