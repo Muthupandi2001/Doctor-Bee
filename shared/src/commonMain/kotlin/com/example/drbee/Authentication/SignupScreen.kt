@@ -49,17 +49,110 @@ private val GlassShape = RoundedCornerShape(20.dp)
 private val GlassFill        = Color(0x1AFFFFFF)   // white 10%
 private val GlassBorder      = Color(0x33FFFFFF)   // white 20%
 private val GlassInnerShine  = Color(0x26FFFFFF)   // white 15% — top highlight line
-
 @Composable
-fun SignupScreen(
-    onNavigateToLogin: () -> Unit,
-    onSignupSuccess: (uid: String) -> Unit
+fun GlassField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    icon: ImageVector,
+    error: String?             = null,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isPassword: Boolean        = false
 ) {
+
     // ── Theme tokens ──────────────────────────────────────────────────────
     val gradientBrush = WonderBeeTheme.extendedDesign.primaryGradientBrush
     val accentColor   = WonderBeeTheme.extendedDesign.inputFocusedBorderColor
     val errorColor    = WonderBeeTheme.materialScheme.error
     val onBg          = WonderBeeTheme.materialScheme.onBackground
+
+    val borderColor = when {
+        error != null -> errorColor
+        else          -> GlassBorder
+    }
+
+    Column {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(GlassShape)
+                // ── frosted glass fill ────────────────────────────────
+                .background(GlassFill)
+                // ── outer glass border ────────────────────────────────
+                .border(
+                    width = 1.dp,
+                    color = borderColor,
+                    shape = GlassShape
+                )
+                // ── inner top-edge shine line (iOS liquid glass effect)
+                .drawBehind {
+                    drawLine(
+                        color       = GlassInnerShine,
+                        start       = Offset(24f, 2f),
+                        end         = Offset(size.width - 24f, 2f),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+        ) {
+            TextField(
+                value                = value,
+                onValueChange        = onValueChange,
+                placeholder          = {
+                    Text(
+                        text     = label,
+                        color    = Color.White.copy(alpha = 0.4f),
+                        fontSize = 15.sp
+                    )
+                },
+                leadingIcon          = {
+                    Icon(
+                        imageVector        = icon,
+                        contentDescription = null,
+                        tint               = if (error != null)
+                            errorColor
+                        else
+                            accentColor.copy(alpha = 0.85f),
+                        modifier           = Modifier.size(22.dp)
+                    )
+                },
+                singleLine           = true,
+                visualTransformation = if (isPassword)
+                    PasswordVisualTransformation()
+                else
+                    VisualTransformation.None,
+                keyboardOptions      = KeyboardOptions(keyboardType = keyboardType),
+                modifier             = Modifier.fillMaxWidth(),
+                colors               = TextFieldDefaults.colors(
+                    focusedTextColor          = Color.White,
+                    unfocusedTextColor        = Color.White,
+                    errorTextColor            = errorColor,
+                    focusedContainerColor     = Color.Transparent,
+                    unfocusedContainerColor   = Color.Transparent,
+                    errorContainerColor       = Color.Transparent,
+                    focusedIndicatorColor     = Color.Transparent,
+                    unfocusedIndicatorColor   = Color.Transparent,
+                    errorIndicatorColor       = Color.Transparent,
+                    cursorColor               = accentColor
+                )
+            )
+        }
+        // inline error
+        error?.let {
+            Text(
+                text     = it,
+                color    = errorColor,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
+            )
+        }
+    }
+}
+@Composable
+fun SignupScreen(
+    onNavigateToLogin: () -> Unit,
+    onSignupSuccess: (uid: String) -> Unit
+) {
+
 
     // ── State ─────────────────────────────────────────────────────────────
     val authRepository = remember { AuthRepository() }
@@ -79,98 +172,14 @@ fun SignupScreen(
     var passwordError        by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
 
-    // ── Liquid glass field composable ─────────────────────────────────────
-    @Composable
-    fun GlassField(
-        value: String,
-        onValueChange: (String) -> Unit,
-        label: String,
-        icon: ImageVector,
-        error: String?             = null,
-        keyboardType: KeyboardType = KeyboardType.Text,
-        isPassword: Boolean        = false
-    ) {
-        val borderColor = when {
-            error != null -> errorColor
-            else          -> GlassBorder
-        }
+    // ── Theme tokens ──────────────────────────────────────────────────────
+    val gradientBrush = WonderBeeTheme.extendedDesign.primaryGradientBrush
+    val accentColor   = WonderBeeTheme.extendedDesign.inputFocusedBorderColor
+    val errorColor    = WonderBeeTheme.materialScheme.error
+    val onBg          = WonderBeeTheme.materialScheme.onBackground
 
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(GlassShape)
-                    // ── frosted glass fill ────────────────────────────────
-                    .background(GlassFill)
-                    // ── outer glass border ────────────────────────────────
-                    .border(
-                        width = 1.dp,
-                        color = borderColor,
-                        shape = GlassShape
-                    )
-                    // ── inner top-edge shine line (iOS liquid glass effect)
-                    .drawBehind {
-                        drawLine(
-                            color       = GlassInnerShine,
-                            start       = Offset(24f, 2f),
-                            end         = Offset(size.width - 24f, 2f),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-            ) {
-                TextField(
-                    value                = value,
-                    onValueChange        = onValueChange,
-                    placeholder          = {
-                        Text(
-                            text     = label,
-                            color    = Color.White.copy(alpha = 0.4f),
-                            fontSize = 15.sp
-                        )
-                    },
-                    leadingIcon          = {
-                        Icon(
-                            imageVector        = icon,
-                            contentDescription = null,
-                            tint               = if (error != null)
-                                errorColor
-                            else
-                                accentColor.copy(alpha = 0.85f),
-                            modifier           = Modifier.size(22.dp)
-                        )
-                    },
-                    singleLine           = true,
-                    visualTransformation = if (isPassword)
-                        PasswordVisualTransformation()
-                    else
-                        VisualTransformation.None,
-                    keyboardOptions      = KeyboardOptions(keyboardType = keyboardType),
-                    modifier             = Modifier.fillMaxWidth(),
-                    colors               = TextFieldDefaults.colors(
-                        focusedTextColor          = Color.White,
-                        unfocusedTextColor        = Color.White,
-                        errorTextColor            = errorColor,
-                        focusedContainerColor     = Color.Transparent,
-                        unfocusedContainerColor   = Color.Transparent,
-                        errorContainerColor       = Color.Transparent,
-                        focusedIndicatorColor     = Color.Transparent,
-                        unfocusedIndicatorColor   = Color.Transparent,
-                        errorIndicatorColor       = Color.Transparent,
-                        cursorColor               = accentColor
-                    )
-                )
-            }
-            // inline error
-            error?.let {
-                Text(
-                    text     = it,
-                    color    = errorColor,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-                )
-            }
-        }
-    }
+    // ── Liquid glass field composable ─────────────────────────────────────
+
 
     // ── Animated liquid background ────────────────────────────────────────
     // Three soft radial orbs — simulates iOS depth-blur background
