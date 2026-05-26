@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.drbee.Helper.SessionManager
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 
@@ -26,7 +27,11 @@ fun SearchScreen(onInviteClicked: (String) -> Unit) {
     val currentUser by Firebase.auth.authStateChanged.collectAsState(
         initial = Firebase.auth.currentUser
     )
-    val currentUserId = currentUser?.uid
+
+// Fallback to SessionManager if Firebase UID is null or empty
+    val currentUserId = currentUser?.uid.takeUnless { it.isNullOrEmpty() }
+        ?: SessionManager.savedUserId.takeUnless { it.isEmpty() }
+
 
     Column(
         modifier = Modifier.fillMaxSize(),

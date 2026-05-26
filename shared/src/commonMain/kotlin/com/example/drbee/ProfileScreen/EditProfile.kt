@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
@@ -28,22 +29,81 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.drbee.Helper.BeeAmber
 import com.example.drbee.Helper.BeeAmberLight
 import com.example.drbee.Helper.BeeBackground
 import com.example.drbee.Helper.BeeBrown
 import com.example.drbee.Helper.BeeCard
+import com.example.drbee.ProfileScreen.ProfileViewModel.ProfileUiState
+import com.example.drbee.ProfileScreen.ProfileViewModel.ProfileViewModel
 import com.example.drbee.ProfileScreen.ProfileViewModel.UserProfile
 
-// ─────────────────────────────────────────────────────────────────────────────
-// This file lives in commonMain — NO android.* imports allowed.
-//
-// Strategy: Base64 decoding (Android-only) is done in MainActivity.kt inside
-// processAndCompressImage. The result is already a Base64 string stored in
-// Firebase. For DISPLAY we accept an optional ImageBitmap from the caller
-// (decoded on the Android side) via [profileImageBitmap]. The raw Base64 string
-// [currentImageBase64] is still kept in state for saving back to Firebase.
-// ─────────────────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditProfileProfile(
+    userId: String,
+    onBack: () -> Unit,
+    onShareRequested: (String) -> Unit,
+    onPickImageRequested: ((String) -> Unit) -> Unit,
+    // Android side supplies this lambda — decodes Base64 → ImageBitmap off the main thread
+    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit,
+    viewModel: ProfileViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var isSaveSuccessful by remember { mutableStateOf(false) }
+
+    LaunchedEffect(userId) {
+        if (userId.isNotBlank()) viewModel.loadProfile(userId)
+    }
+
+    LaunchedEffect(uiState) {
+        if (uiState is ProfileUiState.Loading) isSaveSuccessful = false
+    }
+
+    Scaffold(
+        containerColor = BeeBackground,
+        topBar = {
+            TopAppBar(
+                title = { Text("Edit Profile", color = BeeBrown, fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = BeeAmber)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = BeeBackground)
+            )
+        }
+    ) { padding ->
+        when (val state = uiState) {
+            is ProfileUiState.Loading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = BeeAmber)
+                }
+            }
+            is ProfileUiState.Error -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Error: ${state.message}", color = Color.Red)
+                }
+            }
+            is ProfileUiState.Success -> {
+                BeeEditProfileContent(
+                    user = state.user,
+                    modifier = Modifier.padding(padding),
+                    onSaveClick = { updatedUser ->
+                        viewModel.updateProfile(updatedUser)
+                        isSaveSuccessful = true
+                    },
+                    isSaveSuccessful = isSaveSuccessful,
+                    onPickImageRequested = onPickImageRequested,
+                    onDecodeImageRequested = onDecodeImageRequested  // passed straight through
+                )
+            }
+        }
+    }
+}
+
+
 
 @Composable
 fun BeeEditProfileContent(
@@ -51,10 +111,7 @@ fun BeeEditProfileContent(
     modifier: Modifier = Modifier,
     onSaveClick: (UserProfile) -> Unit,
     isSaveSuccessful: Boolean,
-    // Called when user taps avatar; platform opens picker, returns base64 string
     onPickImageRequested: ((String) -> Unit) -> Unit,
-    // Called whenever currentImageBase64 changes so the Android side can decode
-    // it into an ImageBitmap and pass it back for display (keeps commonMain clean)
     onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit
 ) {
     var nameState     by remember { mutableStateOf(user.name) }
@@ -62,12 +119,8 @@ fun BeeEditProfileContent(
     var phoneState    by remember { mutableStateOf(user.phone) }
     var websiteState  by remember { mutableStateOf(user.message) }
     var currentImageBase64 by remember { mutableStateOf(user.profileImage) }
-
-    // ImageBitmap decoded on the Android side — null until decoding completes
     var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    // Whenever the base64 string changes (loaded from Firebase OR newly picked),
-    // ask the Android side to decode it and hand back an ImageBitmap
     LaunchedEffect(currentImageBase64) {
         if (currentImageBase64.isNotEmpty()) {
             onDecodeImageRequested(currentImageBase64) { bitmap ->

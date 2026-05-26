@@ -35,7 +35,6 @@ import androidx.navigation.NavController
 import com.example.drbee.ChatActivity.FirebaseChatModel
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
-import com.example.drbee.Routes
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
@@ -84,18 +83,6 @@ fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
             SessionManager.isLoggedIn -> SessionManager.savedUserId
             else -> ""
         }
-//        if (currentUid.isBlank()) {
-//            // If it's truly blank (and initialization settled), fallback to local cache instead of wiping
-//            if (SessionManager.isLoggedIn) {
-//                userName = SessionManager.savedUserName.ifBlank { "Hive Member" }
-//                userEmail = SessionManager.savedUserEmail.ifBlank { "Syncing..." }
-//            } else {
-//                userName  = "Anonymous User"
-//                userEmail = "Not logged in"
-//            }
-//            isLoading = false
-//            return@LaunchedEffect
-//        }
 
         try {
             Firebase.database(databaseUrl)

@@ -45,7 +45,6 @@ import com.example.drbee.Helper.SessionManager.savedUserId
 import com.example.drbee.ProfileScreen.ProfileScreen
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
-import com.example.drbee.Routes
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 
@@ -64,7 +63,10 @@ fun MainScreen(
     onShareRequested: (String) -> Unit,
     onLogoutSuccess: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
+//    var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
+
+// AFTER
+    var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Camera) }
 
     val navigationEventState = rememberNavigationEventState(
         currentInfo = NavigationEventInfo.None
@@ -139,6 +141,8 @@ fun BottomBar(
 ) {
     val activeGradient  = WonderBeeTheme.extendedDesign.primaryGradientBrush
     val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
+
+
 
     NavigationBar {
 

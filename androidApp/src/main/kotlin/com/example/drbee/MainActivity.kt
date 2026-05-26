@@ -27,6 +27,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
+import com.example.drbee.NavHost.DeepLinkParams
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
 import java.io.ByteArrayOutputStream
