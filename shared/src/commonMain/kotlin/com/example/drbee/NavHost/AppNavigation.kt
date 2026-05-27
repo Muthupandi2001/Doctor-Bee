@@ -1,14 +1,13 @@
-package com.example.drbee.NavHost  // ✅ fix 1: lowercase package name
+package com.example.drbee.NavHost
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.navigation.NavHostController             // ✅ fix 2: correct type
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable           // ✅ fix 3: missing import
+import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.example.drbee.Authentication.DashboardScreen
 import com.example.drbee.Authentication.GetStartedScreen
@@ -16,7 +15,6 @@ import com.example.drbee.Authentication.LoginScreen
 import com.example.drbee.Authentication.SignupScreen
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.MainScreen.MainScreen
-import com.example.drbee.NavHost.NavRoutes
 import com.example.drbee.OnBoarding.OnBoardingScreen
 import com.example.drbee.ProfileScreen.EditProfileProfile
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.currentAppThemeSelection
@@ -28,14 +26,13 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun AppNavigation(
-    navController: NavHostController,                  // ✅ fix 2: was NavController
-    startDestination: String,
-    pendingProfileNavigation: String?,
-    onPendingProfileConsumed: () -> Unit,
-    onShareRequested: (String) -> Unit,
-    onPickImageRequested: ((String) -> Unit) -> Unit,
-    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit,
-    onUserLoggedIn: (uid: String) -> Unit
+    navController            : NavHostController,
+    startDestination         : String,
+    pendingProfileNavigation : String?,
+    onPendingProfileConsumed : () -> Unit,
+    onUserLoggedIn           : (uid: String) -> Unit
+    // ✅ onShareRequested removed — shareReferralLink() is called directly
+    //    inside SearchScreen via the expect/actual fun
 ) {
     LaunchedEffect(startDestination, pendingProfileNavigation) {
         val target = pendingProfileNavigation ?: return@LaunchedEffect
@@ -48,7 +45,7 @@ fun AppNavigation(
 
     WonderBeeTheme(themeType = currentAppThemeSelection) {
         NavHost(
-            navController = navController,
+            navController    = navController,
             startDestination = startDestination
         ) {
 
@@ -64,8 +61,8 @@ fun AppNavigation(
 
             composable(NavRoutes.LOGIN) {
                 LoginScreen(
-                    navController = navController,
-                    onLoginSuccess = {
+                    navController     = navController,
+                    onLoginSuccess    = {
                         val uid = Firebase.auth.currentUser?.uid ?: ""
                         SessionManager.saveUserID(userId = uid)
                         SessionManager.isFreshLogin = true
@@ -87,7 +84,7 @@ fun AppNavigation(
             composable(NavRoutes.SIGNUP) {
                 SignupScreen(
                     onNavigateToLogin = { navController.navigate(NavRoutes.LOGIN) },
-                    onSignupSuccess = { uid -> onUserLoggedIn(uid) }
+                    onSignupSuccess   = { uid -> onUserLoggedIn(uid) }
                 )
             }
 
@@ -109,34 +106,33 @@ fun AppNavigation(
 
             composable(NavRoutes.MAINSCREEN) {
                 MainScreen(
-                    navController = navController,
-                    onShareRequested = { userId -> onShareRequested(userId) },
+                    navController   = navController,
                     onLogoutSuccess = {
                         navController.navigate(NavRoutes.GET_STARTED) {
                             popUpTo(0) { inclusive = true }
                             launchSingleTop = true
                         }
                     }
+                    // ✅ onShareRequested removed
                 )
             }
 
             composable(
-                route = NavRoutes.PROFILE,
+                route     = NavRoutes.PROFILE,
                 arguments = listOf(
                     navArgument("userId") {
-                        type = NavType.StringType
+                        type         = NavType.StringType
                         defaultValue = ""
                     }
                 )
             ) { backStackEntry ->
+                // ✅ Read userId directly from backStackEntry arguments — fixes type error
                 val userId by backStackEntry.savedStateHandle.getStateFlow("userId", "")
                     .collectAsState()
                 EditProfileProfile(
                     userId = userId,
                     onBack = { navController.popBackStack() },
-                    onShareRequested = { id -> onShareRequested(id) },
-                    onPickImageRequested = onPickImageRequested,
-                    onDecodeImageRequested = onDecodeImageRequested
+//                    onShareRequested = { id -> onShareRequested(id) },
                 )
             }
 

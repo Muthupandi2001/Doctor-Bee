@@ -6,22 +6,23 @@ import kotlinx.serialization.Transient
 
 @Serializable
 data class FirebaseChatModel(
-    val id           : String = "",
-    val name         : String = "",
-    val email        : String = "",
-    val message      : String = "",
-    val time         : String = "",
-    val colorHex     : String = "#6C63FF",
-    val profileImage : String = ""   // ✅ base64 image string from Firebase
+    val id           : String  = "",
+    val name         : String  = "",
+    val email        : String  = "",
+    val message      : String  = "",
+    val time         : String  = "",
+    val colorHex     : String  = "#6C63FF",
+    val profileImage : String? = null  // ✅ base64 image string from Firebase
 )
 
 @Serializable
 data class FirebaseMessageModel(
-    val id       : String = "",
-    val text     : String = "",
-    val senderId : String = "",
+    val id          : String  = "",
+    val text        : String  = "",
+    val imageBase64 : String? = null,  // ✅ null = text-only, non-null = image message
+    val senderId    : String  = "",
     @Transient
-    val isMe     : Boolean = false
+    val isMe        : Boolean = false
 )
 
 data class ChatModel(

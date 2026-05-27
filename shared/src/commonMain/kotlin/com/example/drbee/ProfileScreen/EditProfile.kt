@@ -38,25 +38,24 @@ import com.example.drbee.Helper.BeeCard
 import com.example.drbee.ProfileScreen.ProfileViewModel.ProfileUiState
 import com.example.drbee.ProfileScreen.ProfileViewModel.ProfileViewModel
 import com.example.drbee.ProfileScreen.ProfileViewModel.UserProfile
+import com.example.drbee.decodeBase64ToImageBitmap      // ✅ expect fun
+import com.example.drbee.rememberImagePickerLauncher   // ✅ expect fun
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileProfile(
-    userId: String,
-    onBack: () -> Unit,
-    onShareRequested: (String) -> Unit,
-    onPickImageRequested: ((String) -> Unit) -> Unit,
-    // Android side supplies this lambda — decodes Base64 → ImageBitmap off the main thread
-    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit,
-    viewModel: ProfileViewModel = viewModel()
+    userId           : String,
+    onBack           : () -> Unit,
+//    onShareRequested : (String) -> Unit,
+    // ✅ onPickImageRequested and onDecodeImageRequested REMOVED
+    viewModel        : ProfileViewModel = viewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState          by viewModel.uiState.collectAsState()
     var isSaveSuccessful by remember { mutableStateOf(false) }
 
     LaunchedEffect(userId) {
         if (userId.isNotBlank()) viewModel.loadProfile(userId)
     }
-
     LaunchedEffect(uiState) {
         if (uiState is ProfileUiState.Loading) isSaveSuccessful = false
     }
@@ -65,7 +64,9 @@ fun EditProfileProfile(
         containerColor = BeeBackground,
         topBar = {
             TopAppBar(
-                title = { Text("Edit Profile", color = BeeBrown, fontWeight = FontWeight.SemiBold) },
+                title = {
+                    Text("Edit Profile", color = BeeBrown, fontWeight = FontWeight.SemiBold)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = BeeAmber)
@@ -88,51 +89,51 @@ fun EditProfileProfile(
             }
             is ProfileUiState.Success -> {
                 BeeEditProfileContent(
-                    user = state.user,
-                    modifier = Modifier.padding(padding),
-                    onSaveClick = { updatedUser ->
+                    user             = state.user,
+                    modifier         = Modifier.padding(padding),
+                    isSaveSuccessful = isSaveSuccessful,
+                    onSaveClick      = { updatedUser ->
                         viewModel.updateProfile(updatedUser)
                         isSaveSuccessful = true
-                    },
-                    isSaveSuccessful = isSaveSuccessful,
-                    onPickImageRequested = onPickImageRequested,
-                    onDecodeImageRequested = onDecodeImageRequested  // passed straight through
+                    }
+                    // ✅ No more lambda params passed down
                 )
             }
         }
     }
 }
 
-
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun BeeEditProfileContent(
-    user: UserProfile,
-    modifier: Modifier = Modifier,
-    onSaveClick: (UserProfile) -> Unit,
-    isSaveSuccessful: Boolean,
-    onPickImageRequested: ((String) -> Unit) -> Unit,
-    onDecodeImageRequested: (String, (ImageBitmap?) -> Unit) -> Unit
+    user             : UserProfile,
+    modifier         : Modifier = Modifier,
+    isSaveSuccessful : Boolean,
+    onSaveClick      : (UserProfile) -> Unit
+    // ✅ onPickImageRequested and onDecodeImageRequested REMOVED
 ) {
-    var nameState     by remember { mutableStateOf(user.name) }
-    var emailState    by remember { mutableStateOf(user.email) }
-    var phoneState    by remember { mutableStateOf(user.phone) }
-    var websiteState  by remember { mutableStateOf(user.message) }
+    var nameState          by remember { mutableStateOf(user.name) }
+    var emailState         by remember { mutableStateOf(user.email) }
+    var phoneState         by remember { mutableStateOf(user.phone) }
+    var websiteState       by remember { mutableStateOf(user.message) }
     var currentImageBase64 by remember { mutableStateOf(user.profileImage) }
-    var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var profileBitmap      by remember { mutableStateOf<ImageBitmap?>(null) }
 
+    // ✅ Decode directly via expect fun — no lambda from MainActivity
     LaunchedEffect(currentImageBase64) {
-        if (currentImageBase64.isNotEmpty()) {
-            onDecodeImageRequested(currentImageBase64) { bitmap ->
-                profileBitmap = bitmap
-            }
-        } else {
-            profileBitmap = null
-        }
+        profileBitmap = currentImageBase64
+            .takeIf { it.isNotEmpty() }
+            ?.let { decodeBase64ToImageBitmap(it) }
+    }
+
+    // ✅ Pick image via expect/actual — Camera + Gallery chooser on Android
+    val imagePicker = rememberImagePickerLauncher { base64 ->
+        if (base64.isNotEmpty()) currentImageBase64 = base64
     }
 
     Column(
-        modifier = modifier
+        modifier            = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
@@ -140,25 +141,20 @@ fun BeeEditProfileContent(
     ) {
         Spacer(Modifier.height(20.dp))
 
+        // ── Avatar picker ────────────────────────────────────────────────────
         Box(
-            modifier = Modifier
+            modifier         = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
-                .clickable {
-                    onPickImageRequested { base64Result ->
-                        currentImageBase64 = base64Result
-                    }
-                },
+                .clickable { imagePicker.launch() },   // ✅ direct launch
             contentAlignment = Alignment.Center
-        )
-        {
+        ) {
             if (profileBitmap != null) {
-                // ImageBitmap is a pure Compose/commonMain type — no android.* needed
                 Image(
-                    bitmap = profileBitmap!!,
+                    bitmap             = profileBitmap!!,
                     contentDescription = "Profile Photo",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    modifier           = Modifier.fillMaxSize(),
+                    contentScale       = ContentScale.Crop
                 )
             } else {
                 Box(
@@ -169,14 +165,15 @@ fun BeeEditProfileContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = nameState.take(2).uppercase(),
-                        fontSize = 36.sp,
+                        text       = nameState.take(2).uppercase(),
+                        fontSize   = 36.sp,
                         fontWeight = FontWeight.Bold,
-                        color = BeeAmber
+                        color      = BeeAmber
                     )
                 }
             }
 
+            // Camera badge overlay
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -187,15 +184,16 @@ fun BeeEditProfileContent(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Default.CameraAlt,
+                    imageVector        = Icons.Default.CameraAlt,
                     contentDescription = "Change photo",
-                    tint = BeeCard,
-                    modifier = Modifier.size(16.dp)
+                    tint               = BeeCard,
+                    modifier           = Modifier.size(16.dp)
                 )
             }
         }
 
         Spacer(Modifier.height(24.dp))
+
         ProfileInputField(Icons.Default.Person,   "Full Name",   nameState)    { nameState    = it }
         Spacer(Modifier.height(16.dp))
         ProfileInputField(Icons.Default.Phone,    "Phone",       phoneState)   { phoneState   = it }
@@ -203,8 +201,8 @@ fun BeeEditProfileContent(
         ProfileInputField(Icons.Default.Email,    "Email",       emailState)   { emailState   = it }
         Spacer(Modifier.height(16.dp))
         ProfileInputField(Icons.Default.Language, "Website/Bio", websiteState) { websiteState = it }
-
         Spacer(Modifier.height(32.dp))
+
         BeeSaveButton(isSaveSuccessful) {
             onSaveClick(
                 user.copy(
@@ -212,42 +210,47 @@ fun BeeEditProfileContent(
                     email        = emailState,
                     phone        = phoneState,
                     message      = websiteState,
-                    profileImage = currentImageBase64  // raw Base64 → Firebase
+                    profileImage = currentImageBase64
                 )
             )
         }
+
         Spacer(Modifier.height(20.dp))
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileInputField(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit
+    icon          : ImageVector,
+    label         : String,
+    value         : String,
+    onValueChange : (String) -> Unit
 ) {
     OutlinedTextField(
-        value = value,
+        value         = value,
         onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label, color = BeeBrown.copy(alpha = 0.7f)) },
-        leadingIcon = { Icon(icon, contentDescription = null, tint = BeeAmber) },
-        singleLine = true,
-        shape = RoundedCornerShape(12.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor    = BeeCard,
-            unfocusedContainerColor  = BeeCard,
-            disabledContainerColor   = BeeCard,
-            focusedIndicatorColor    = BeeAmber,
-            unfocusedIndicatorColor  = BeeBrown.copy(alpha = 0.2f),
-            focusedTextColor         = BeeBrown,
-            unfocusedTextColor       = BeeBrown,
-            cursorColor              = BeeAmber
+        modifier      = Modifier.fillMaxWidth(),
+        label         = { Text(label, color = BeeBrown.copy(alpha = 0.7f)) },
+        leadingIcon   = { Icon(icon, contentDescription = null, tint = BeeAmber) },
+        singleLine    = true,
+        shape         = RoundedCornerShape(12.dp),
+        colors        = TextFieldDefaults.colors(
+            focusedContainerColor   = BeeCard,
+            unfocusedContainerColor = BeeCard,
+            disabledContainerColor  = BeeCard,
+            focusedIndicatorColor   = BeeAmber,
+            unfocusedIndicatorColor = BeeBrown.copy(alpha = 0.2f),
+            focusedTextColor        = BeeBrown,
+            unfocusedTextColor      = BeeBrown,
+            cursorColor             = BeeAmber
         )
     )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun BeeSaveButton(isSaveSuccessful: Boolean, onClick: () -> Unit) {

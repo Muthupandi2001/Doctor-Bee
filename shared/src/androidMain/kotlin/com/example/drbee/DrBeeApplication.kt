@@ -7,7 +7,7 @@ import com.google.firebase.initialize
 class DrBeeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-
+//        AppContext.init(this)
         // ✅ Initialize KMP Firebase using the GitLive context wrapper
         Firebase.initialize(this)
     }

@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.messaging.FirebaseMessaging
@@ -15,22 +16,26 @@ class DrBeeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // ── 1. Core init ──────────────────────────────────────────────────────
         Firebase.initialize(this)
         FirebaseDatabase.getInstance().setPersistenceEnabled(true)
-
-        // ✅ Set context FIRST before anything else
         NotificationService.appContext = applicationContext
 
-        NotificationService().initialize()
+        // ── 2. Notification channel (must exist before any notification) ───────
         createNotificationChannel()
 
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-            if (!uid.isNullOrBlank()) {
-                MyFCMService.saveTokenToDatabase(uid, token)
-            } else {
-                MyFCMService.pendingToken = token
-            }
+        // ── 3. NotificationService setup ──────────────────────────────────────
+        NotificationService().initialize()
+
+        // ── 4. Token fetch for already-logged-in user on app start ────────────
+        //    Uses retry — handles SERVICE_NOT_AVAILABLE on new/cold devices
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (!uid.isNullOrBlank()) {
+            Log.d("FCM", "App start — fetching token for uid=$uid")
+            FcmTokenHelper.initForCurrentUser(uid)
+        } else {
+            // Not logged in yet — onNewToken or flushPendingToken will handle it
+            Log.d("FCM", "App start — no user, token will be saved after login")
         }
     }
 
@@ -41,7 +46,7 @@ class DrBeeApplication : Application() {
                 "Chat Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "DrBee chat message notifications"
+                description   = "DrBee chat message notifications"
                 enableLights(true)
                 enableVibration(true)
             }

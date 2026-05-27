@@ -3,17 +3,7 @@ package com.example.drbee.ChatActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,25 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,51 +24,111 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.NotificationService
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 import com.example.drbee.decodeBase64ToImageBitmap
+import com.example.drbee.rememberImagePickerLauncher
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
-import drbee.shared.generated.resources.Res
-import drbee.shared.generated.resources.apj
-import drbee.shared.generated.resources.unicorn
 import io.github.aakira.napier.Napier
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.painterResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatDetailScreen(
-    chat: FirebaseChatModel,
-    onBack: () -> Unit
+    chat   : FirebaseChatModel,
+    onBack : () -> Unit
 ) {
-    var messageText by remember { mutableStateOf("") }
-    var dbMessages by remember { mutableStateOf<List<FirebaseMessageModel>>(emptyList()) }
-    val scope = rememberCoroutineScope()
-    val listState = rememberLazyListState()
-
-    val notificationService = remember { NotificationService() }
+    // ── State ────────────────────────────────────────────────────────────────
+    var messageText   by remember { mutableStateOf("") }
+    var dbMessages    by remember { mutableStateOf<List<FirebaseMessageModel>>(emptyList()) }
     var currentUserId by remember { mutableStateOf("") }
-
-    // ✅ Decode profile image from base64
     var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    LaunchedEffect(chat.profileImage) {
-        val base64 = chat.profileImage.orEmpty()
-        profileBitmap = if (base64.isNotEmpty()) {
-            withContext(Dispatchers.Default) {
-                decodeBase64ToImageBitmap(base64)
-            }
-        } else null
+    val scope               = rememberCoroutineScope()
+    val listState           = rememberLazyListState()
+    val notificationService = remember { NotificationService() }
+    val databaseUrl         = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
+
+    // ── Stable room ID ───────────────────────────────────────────────────────
+    val roomId = remember(currentUserId, chat.id) {
+        val a = currentUserId.lowercase()
+        val b = chat.id.lowercase()
+        if (a < b) "${a}_${b}" else "${b}_${a}"
     }
 
+    // ── sendMessage — defined BEFORE imagePicker so the lambda can reference it ──
+    fun sendMessage(text: String = "", imageBase64: String = "") {
+        if (currentUserId.isEmpty()) return
+        scope.launch {
+            try {
+                val ref = Firebase.database(databaseUrl)
+                    .reference("chats_messages")
+                    .child(roomId)
+                    .push()
+
+                ref.setValue(
+                    FirebaseMessageModel(
+                        id          = ref.key ?: "",
+                        text        = text,
+                        imageBase64 = imageBase64.ifEmpty { null },
+                        senderId    = currentUserId
+                    )
+                )
+
+                val senderName = runCatching {
+                    Firebase.database(databaseUrl)
+                        .reference("users")
+                        .child(currentUserId)
+                        .child("name")
+                        .valueEvents
+                        .first()
+                        .value as? String
+                }.getOrNull() ?: chat.name
+
+                notificationService.sendPushNotification(
+                    recipientUserId = chat.id,
+                    senderName      = senderName,
+                    messageText     = text.ifEmpty { "📷 Image" },
+                    senderId        = currentUserId,
+                    roomId          = roomId
+                )
+            } catch (e: Exception) {
+                Napier.e("Send failed: ${e.message}")
+            }
+        }
+    }
+
+    // ── Image picker — uses expect/actual, no MainActivity needed ────────────
+    val imagePicker = rememberImagePickerLauncher { base64 ->
+        if (base64.isNotEmpty()) sendMessage(imageBase64 = base64)
+    }
+
+    // ── Back handler ─────────────────────────────────────────────────────────
+    val backState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
+    NavigationBackHandler(
+        state           = backState,
+        isBackEnabled   = true,
+        onBackCancelled = {},
+        onBackCompleted = { onBack() }
+    )
+
+    // ── Decode header profile image ──────────────────────────────────────────
+    LaunchedEffect(chat.profileImage) {
+        profileBitmap = chat.profileImage
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { decodeBase64ToImageBitmap(it) }
+    }
+
+    // ── Resolve current user ─────────────────────────────────────────────────
     LaunchedEffect(Unit) {
         currentUserId = when {
             Firebase.auth.currentUser?.uid?.isNotBlank() == true ->
@@ -104,34 +139,24 @@ fun ChatDetailScreen(
         }
     }
 
-    val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
-
-    // ✅ Correct 1-to-1 room ID — alphabetical sort guarantees same ID for both users
-    val roomId = remember(currentUserId, chat.id) {
-        val id1 = currentUserId.lowercase()
-        val id2 = chat.id.lowercase()
-        if (id1 < id2) "${id1}_${id2}" else "${id2}_${id1}"
-    }
-
+    // ── Auto-scroll on new message ───────────────────────────────────────────
     LaunchedEffect(dbMessages.size) {
-        if (dbMessages.isNotEmpty()) {
-            listState.animateScrollToItem(dbMessages.size - 1)
-        }
+        if (dbMessages.isNotEmpty()) listState.animateScrollToItem(dbMessages.size - 1)
     }
 
+    // ── Real-time message listener ───────────────────────────────────────────
     LaunchedEffect(roomId) {
         try {
             Firebase.database(databaseUrl)
                 .reference("chats_messages")
                 .child(roomId)
                 .valueEvents
-                .mapNotNull { dataSnapshot ->
-                    dataSnapshot.children.mapNotNull { childSnapshot ->
+                .mapNotNull { snapshot ->
+                    snapshot.children.mapNotNull { child ->
                         try {
-                            val msg = childSnapshot.value<FirebaseMessageModel>()
-                            msg.copy(
-                                id = childSnapshot.key ?: "",
-                                isMe = msg.senderId == currentUserId
+                            child.value<FirebaseMessageModel>().copy(
+                                id   = child.key ?: "",
+                                isMe = child.value<FirebaseMessageModel>().senderId == currentUserId
                             )
                         } catch (e: Exception) {
                             Napier.e("Deserialize error: ${e.message}")
@@ -139,20 +164,23 @@ fun ChatDetailScreen(
                         }
                     }
                 }
-                .collect { fetchedMessages -> dbMessages = fetchedMessages }
+                .collect { fetched -> dbMessages = fetched }
         } catch (e: Exception) {
             Napier.e("Stream error: ${e.message}")
         }
     }
 
+    // ── UI ───────────────────────────────────────────────────────────────────
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+            .systemBarsPadding()
+            .imePadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            // ── TOP HEADER ──────────────────────────
+            // ── Header ───────────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -161,190 +189,113 @@ fun ChatDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = null,
-                    tint = WonderBeeTheme.materialScheme.onPrimary,
-                    modifier = Modifier.clickable { onBack() }
+                    imageVector        = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint               = WonderBeeTheme.materialScheme.onPrimary,
+                    modifier           = Modifier.clickable { onBack() }
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(Modifier.width(12.dp))
 
-                // ✅ Dynamic profile image from base64
                 Box(
-                    modifier = Modifier
-                        .size(45.dp)
-                        .clip(CircleShape),
+                    modifier         = Modifier.size(45.dp).clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (profileBitmap != null) {
                         Image(
-                            bitmap = profileBitmap!!,
+                            bitmap             = profileBitmap!!,
                             contentDescription = null,
-                            modifier = Modifier
-                                .size(45.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                            modifier           = Modifier.size(45.dp).clip(CircleShape),
+                            contentScale       = ContentScale.Crop
                         )
                     } else {
-                        // ✅ Fallback: show first letter of name
                         Box(
                             modifier = Modifier
                                 .size(45.dp)
-                                .background(
-                                    color = Color.White.copy(alpha = 0.3f),
-                                    shape = CircleShape
-                                ),
+                                .background(Color.White.copy(alpha = 0.3f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = chat.name.take(1).uppercase(),
-                                color = Color.White,
+                                text       = chat.name.take(1).uppercase(),
+                                color      = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
+                                fontSize   = 18.sp
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(Modifier.width(12.dp))
                 Text(
-                    text = chat.name,
-                    color = Color.White,
+                    text       = chat.name,
+                    color      = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
+                    fontSize   = 18.sp
                 )
             }
 
-            // ── CHAT LIST ────────────────────────────
+            // ── Message list ─────────────────────────────────────────────────
             LazyColumn(
-                state = listState,
-                modifier = Modifier
+                state               = listState,
+                modifier            = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp),
-                verticalArrangement = Arrangement.Bottom
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(dbMessages) { msg ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        contentAlignment =
-                            if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
-                    ) {
-                        val bubbleBgColor = if (msg.isMe) {
-                            if (ThemePreferencesManager.isCustomColorEnabled)
-                                ThemePreferencesManager.customColorEnd
-                            else WonderBeeTheme.materialScheme.primary
-                        } else {
-                            if (ThemePreferencesManager.isCustomColorEnabled)
-                                ThemePreferencesManager.customColorStart
-                            else WonderBeeTheme.materialScheme.secondary
-                        }
-
-                        val luminance = (0.299f * bubbleBgColor.red) +
-                                (0.587f * bubbleBgColor.green) +
-                                (0.114f * bubbleBgColor.blue)
-
-                        val bubbleTextColor =
-                            if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
-
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = bubbleBgColor),
-                            shape = if (msg.isMe)
-                                RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp)
-                            else
-                                RoundedCornerShape(16.dp, 16.dp, 16.dp, 2.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Text(
-                                text = msg.text,
-                                modifier = Modifier.padding(
-                                    horizontal = 14.dp,
-                                    vertical = 10.dp
-                                ),
-                                color = bubbleTextColor,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+                items(items = dbMessages, key = { it.id }) { msg ->
+                    ChatMessageBubble(msg = msg)
                 }
             }
 
-            // ── BOTTOM MESSAGE BAR ───────────────────
+            // ── Input bar ────────────────────────────────────────────────────
             Row(
-                modifier = Modifier
+                modifier          = Modifier
                     .fillMaxWidth()
                     .background(WonderBeeTheme.extendedDesign.surfaceBackground)
-                    .padding(12.dp)
-                    .imePadding(),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = { imagePicker.launch() }) {
+                    Icon(
+                        imageVector        = Icons.Default.AttachFile,
+                        contentDescription = "Attach image",
+                        tint               = WonderBeeTheme.materialScheme.primary
+                    )
+                }
+
+                Spacer(Modifier.width(4.dp))
+
                 OutlinedTextField(
-                    value = messageText,
+                    value         = messageText,
                     onValueChange = { messageText = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = {
+                    modifier      = Modifier.weight(1f),
+                    placeholder   = {
                         Text(
-                            text = "Type message...",
+                            text  = "Type message...",
                             color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.5f)
                         )
                     },
-                    shape = RoundedCornerShape(30.dp),
+                    shape     = RoundedCornerShape(30.dp),
                     textStyle = LocalTextStyle.current.copy(
                         color = WonderBeeTheme.materialScheme.onBackground
                     ),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
+                        focusedContainerColor   = WonderBeeTheme.extendedDesign.surfaceBackground,
                         unfocusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-                        focusedBorderColor = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
-                        unfocusedBorderColor = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
-                        cursorColor = WonderBeeTheme.materialScheme.primary
+                        focusedBorderColor      = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
+                        unfocusedBorderColor    = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
+                        cursorColor             = WonderBeeTheme.materialScheme.primary
                     )
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+
+                Spacer(Modifier.width(8.dp))
 
                 FloatingActionButton(
                     onClick = {
-                        if (messageText.isNotBlank() && currentUserId.isNotEmpty()) {
-                            val outgoingText = messageText
+                        val text = messageText.trim()
+                        if (text.isNotBlank()) {
                             messageText = ""
-
-                            scope.launch {
-                                try {
-                                    val messageRef = Firebase.database(databaseUrl)
-                                        .reference("chats_messages")
-                                        .child(roomId)
-                                        .push()
-
-                                    val newMessage = FirebaseMessageModel(
-                                        id = messageRef.key ?: "",
-                                        text = outgoingText,
-                                        senderId = currentUserId
-                                    )
-                                    messageRef.setValue(newMessage)
-
-                                    val senderSnapshot = Firebase.database(databaseUrl)
-                                        .reference("users")
-                                        .child(currentUserId)
-                                        .child("name")
-                                        .valueEvents
-                                        .first()
-
-                                    val senderName =
-                                        (senderSnapshot.value as? String) ?: chat.name
-
-                                    notificationService.sendPushNotification(
-                                        recipientUserId = chat.id,
-                                        senderName = senderName,
-                                        messageText = outgoingText,
-                                        senderId = currentUserId,
-                                        roomId = roomId
-                                    )
-
-                                } catch (e: Exception) {
-                                    Napier.e("Send failed: ${e.message}")
-                                }
-                            }
+                            sendMessage(text = text)
                         }
                     },
                     modifier = Modifier.background(
@@ -352,12 +303,89 @@ fun ChatDetailScreen(
                         shape = FloatingActionButtonDefaults.shape
                     ),
                     containerColor = Color.Transparent,
-                    elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                    elevation      = FloatingActionButtonDefaults.elevation(0.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = null,
-                        tint = Color.White
+                    Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MESSAGE BUBBLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun ChatMessageBubble(msg: FirebaseMessageModel) {
+    var imageBitmap by remember(msg.id) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(msg.imageBase64) {
+        imageBitmap = msg.imageBase64
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { decodeBase64ToImageBitmap(it) }
+    }
+
+    val bubbleBg = if (msg.isMe) {
+        if (ThemePreferencesManager.isCustomColorEnabled) ThemePreferencesManager.customColorEnd
+        else WonderBeeTheme.materialScheme.primary
+    } else {
+        if (ThemePreferencesManager.isCustomColorEnabled) ThemePreferencesManager.customColorStart
+        else WonderBeeTheme.materialScheme.secondary
+    }
+
+    val luminance   = 0.299f * bubbleBg.red + 0.587f * bubbleBg.green + 0.114f * bubbleBg.blue
+    val textColor   = if (luminance > 0.5f) Color(0xFF0F1A34) else Color.White
+    val bubbleShape = if (msg.isMe)
+        RoundedCornerShape(16.dp, 16.dp, 2.dp, 16.dp)
+    else
+        RoundedCornerShape(16.dp, 16.dp, 16.dp, 2.dp)
+
+    Box(
+        modifier         = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        contentAlignment = if (msg.isMe) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Card(
+            colors    = CardDefaults.cardColors(containerColor = bubbleBg),
+            shape     = bubbleShape,
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+
+                if (!msg.imageBase64.isNullOrEmpty()) {
+                    if (imageBitmap != null) {
+                        Image(
+                            bitmap             = imageBitmap!!,
+                            contentDescription = "Image",
+                            modifier           = Modifier
+                                .widthIn(max = 220.dp)
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(220.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Gray.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier    = Modifier.size(28.dp),
+                                color       = textColor,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                if (msg.text.isNotEmpty()) {
+                    if (!msg.imageBase64.isNullOrEmpty()) Spacer(Modifier.height(6.dp))
+                    Text(
+                        text  = msg.text,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }

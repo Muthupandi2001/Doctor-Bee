@@ -1,126 +1,79 @@
 package com.example.drbee.MainScreen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.example.drbee.ChatActivity.ChatActivity
-import com.example.drbee.Helper.SessionManager
-import com.example.drbee.Helper.SessionManager.savedUserId
 import com.example.drbee.ProfileScreen.ProfileScreen
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
-import dev.gitlive.firebase.Firebase
-import dev.gitlive.firebase.auth.auth
 
 sealed class BottomTab(val route: String) {
-    data object Home   : BottomTab("home")
-    data object Search : BottomTab("search")
-    data object Camera : BottomTab("camera")
-    data object Chat   : BottomTab("chat")
-    data object Profile: BottomTab("profile")
+    data object Home    : BottomTab("home")
+    data object Search  : BottomTab("search")
+    data object Camera  : BottomTab("camera")
+    data object Chat    : BottomTab("chat")
+    data object Profile : BottomTab("profile")
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MainScreen(
-    navController: NavController,
-    onShareRequested: (String) -> Unit,
-    onLogoutSuccess: () -> Unit
+    navController   : NavController,
+    onLogoutSuccess : () -> Unit
+    // ✅ onShareRequested, onPickImageRequested, onDecodeImageRequested all removed
 ) {
-//    var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Home) }
-
-// AFTER
-    var selectedTab by remember { mutableStateOf<BottomTab>(BottomTab.Camera) }
+    var selectedTab      by remember { mutableStateOf<BottomTab>(BottomTab.Camera) }
+    var isChatDetailOpen by remember { mutableStateOf(false) }
 
     val navigationEventState = rememberNavigationEventState(
         currentInfo = NavigationEventInfo.None
     )
-
-    val auth = remember { Firebase.auth }
-    val currentUid = auth.currentUser?.uid ?: ""
-
     NavigationBackHandler(
-        state = navigationEventState,
-        isBackEnabled = true,
+        state           = navigationEventState,
+        isBackEnabled   = true,
         onBackCancelled = {},
-        onBackCompleted = {
-            println("Back custom action executed!")
-        }
+        onBackCompleted = { }
     )
 
-
-//
-//    LaunchedEffect(currentUid) {
-//        savedUserId    = currentUid
-//    }
-
     Scaffold(
-        modifier = Modifier
+        modifier       = Modifier
             .fillMaxSize()
             .background(WonderBeeTheme.extendedDesign.surfaceBackground),
         containerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
         bottomBar = {
-            BottomBar(
-                selected = selectedTab,
-                onSelect = { selectedTab = it }
-            )
+            if (!isChatDetailOpen) {
+                BottomBar(selected = selectedTab, onSelect = { selectedTab = it })
+            }
         }
     ) { padding ->
-
-        Box(modifier = Modifier.padding(padding)) {
+        Box(
+            modifier = if (isChatDetailOpen) Modifier.fillMaxSize()
+            else Modifier.padding(padding)
+        ) {
             when (selectedTab) {
-
-                BottomTab.Home -> HomeScreen()
-
-                BottomTab.Search -> SearchScreen(onInviteClicked = onShareRequested)
-
-                BottomTab.Camera -> CameraScreen()
-
-                BottomTab.Chat -> ChatActivity()
-
-                BottomTab.Profile -> ProfileScreen(navController,
-                    onLogoutSuccess = {
-                        // ✅ Session is already cleared inside ProfileScreen
-                        // before this lambda is called.
-                        // Just navigate — wipe the entire back stack cleanly.
-                        onLogoutSuccess()
-                    }
+                BottomTab.Home    -> HomeScreen()
+                BottomTab.Search  -> SearchScreen()   // ✅ no lambda param
+                BottomTab.Camera  -> CameraScreen()
+                BottomTab.Profile -> ProfileScreen(
+                    navController   = navController,
+                    onLogoutSuccess = onLogoutSuccess
+                )
+                BottomTab.Chat -> ChatActivity(
+                    onChatDetailStateChanged = { isOpen -> isChatDetailOpen = isOpen }
+                    // ✅ no image lambdas
                 )
             }
         }
@@ -136,158 +89,136 @@ fun Modifier.applyGradientTint(brush: Brush): Modifier = this
 
 @Composable
 fun BottomBar(
-    selected: BottomTab,
-    onSelect: (BottomTab) -> Unit
+    selected : BottomTab,
+    onSelect : (BottomTab) -> Unit
 ) {
     val activeGradient  = WonderBeeTheme.extendedDesign.primaryGradientBrush
     val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
 
-
-
     NavigationBar {
 
-        // ─────────────────────────────────────────
-        // HOME
-        // ─────────────────────────────────────────
         NavigationBarItem(
             selected = selected == BottomTab.Home,
             onClick  = { onSelect(BottomTab.Home) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Home,
+                    imageVector        = Icons.Default.Home,
                     contentDescription = null,
-                    modifier = if (selected == BottomTab.Home)
+                    modifier           = if (selected == BottomTab.Home)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint = if (selected == BottomTab.Home) Color.White else unselectedColor
+                    tint               = if (selected == BottomTab.Home) Color.White else unselectedColor
                 )
             },
             label = {
                 Text(
-                    text = "Home",
+                    text     = "Home",
                     modifier = if (selected == BottomTab.Home)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color = if (selected == BottomTab.Home) Color.White else unselectedColor
+                    color    = if (selected == BottomTab.Home) Color.White else unselectedColor
                 )
             },
             colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
         )
 
-        // ─────────────────────────────────────────
-        // SEARCH
-        // ─────────────────────────────────────────
         NavigationBarItem(
             selected = selected == BottomTab.Search,
             onClick  = { onSelect(BottomTab.Search) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Search,
+                    imageVector        = Icons.Default.Search,
                     contentDescription = null,
-                    modifier = if (selected == BottomTab.Search)
+                    modifier           = if (selected == BottomTab.Search)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint = if (selected == BottomTab.Search) Color.White else unselectedColor
+                    tint               = if (selected == BottomTab.Search) Color.White else unselectedColor
                 )
             },
             label = {
                 Text(
-                    text = "Search",
+                    text     = "Search",
                     modifier = if (selected == BottomTab.Search)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color = if (selected == BottomTab.Search) Color.White else unselectedColor
+                    color    = if (selected == BottomTab.Search) Color.White else unselectedColor
                 )
             },
             colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
         )
 
-        // ─────────────────────────────────────────
-        // CENTER FAB (Camera)
-        // ─────────────────────────────────────────
+        // Center FAB
         Box(
-            modifier = Modifier
-                .padding(6.dp)
-                .size(60.dp),
+            modifier         = Modifier.padding(6.dp).size(60.dp),
             contentAlignment = Alignment.Center
         ) {
-            val fabGradientBrush = if (ThemePreferencesManager.isCustomColorEnabled) {
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        ThemePreferencesManager.customColorStart,
-                        ThemePreferencesManager.customColorEnd
-                    )
-                )
+            val fabBrush = if (ThemePreferencesManager.isCustomColorEnabled) {
+                Brush.horizontalGradient(listOf(
+                    ThemePreferencesManager.customColorStart,
+                    ThemePreferencesManager.customColorEnd
+                ))
             } else {
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        WonderBeeTheme.materialScheme.primary,
-                        WonderBeeTheme.materialScheme.secondary
-                    )
-                )
+                Brush.horizontalGradient(listOf(
+                    WonderBeeTheme.materialScheme.primary,
+                    WonderBeeTheme.materialScheme.secondary
+                ))
             }
 
             FloatingActionButton(
-                onClick       = { onSelect(BottomTab.Camera) },
-                modifier      = Modifier
+                onClick        = { onSelect(BottomTab.Camera) },
+                modifier       = Modifier
                     .size(52.dp)
-                    .background(brush = fabGradientBrush, shape = CircleShape),
+                    .background(brush = fabBrush, shape = CircleShape),
                 containerColor = Color.Transparent,
                 contentColor   = WonderBeeTheme.materialScheme.onPrimary,
                 elevation      = FloatingActionButtonDefaults.elevation(0.dp),
                 shape          = CircleShape
             ) {
                 Icon(
-                    imageVector    = Icons.Default.Add,
+                    imageVector        = Icons.Default.Add,
                     contentDescription = "Camera",
-                    modifier       = Modifier.size(28.dp)
+                    modifier           = Modifier.size(28.dp)
                 )
             }
         }
 
-        // ─────────────────────────────────────────
-        // CHAT
-        // ─────────────────────────────────────────
         NavigationBarItem(
             selected = selected == BottomTab.Chat,
             onClick  = { onSelect(BottomTab.Chat) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Email,
+                    imageVector        = Icons.Default.Email,
                     contentDescription = null,
-                    modifier = if (selected == BottomTab.Chat)
+                    modifier           = if (selected == BottomTab.Chat)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint = if (selected == BottomTab.Chat) Color.White else unselectedColor
+                    tint               = if (selected == BottomTab.Chat) Color.White else unselectedColor
                 )
             },
             label = {
                 Text(
-                    text = "Chat",
+                    text     = "Chat",
                     modifier = if (selected == BottomTab.Chat)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color = if (selected == BottomTab.Chat) Color.White else unselectedColor
+                    color    = if (selected == BottomTab.Chat) Color.White else unselectedColor
                 )
             },
             colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
         )
 
-        // ─────────────────────────────────────────
-        // PROFILE
-        // ─────────────────────────────────────────
         NavigationBarItem(
             selected = selected == BottomTab.Profile,
             onClick  = { onSelect(BottomTab.Profile) },
             icon = {
                 Icon(
-                    imageVector = Icons.Default.Person,
+                    imageVector        = Icons.Default.Person,
                     contentDescription = null,
-                    modifier = if (selected == BottomTab.Profile)
+                    modifier           = if (selected == BottomTab.Profile)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint = if (selected == BottomTab.Profile) Color.White else unselectedColor
+                    tint               = if (selected == BottomTab.Profile) Color.White else unselectedColor
                 )
             },
             label = {
                 Text(
-                    text = "Profile",
+                    text     = "Profile",
                     modifier = if (selected == BottomTab.Profile)
                         Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color = if (selected == BottomTab.Profile) Color.White else unselectedColor
+                    color    = if (selected == BottomTab.Profile) Color.White else unselectedColor
                 )
             },
             colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
