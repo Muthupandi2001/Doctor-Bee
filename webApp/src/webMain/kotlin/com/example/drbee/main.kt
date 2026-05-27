@@ -36,23 +36,6 @@ fun main() {
     ComposeViewport(document.body!!) {
         App(
             deepLinkParams = deepLinkParams,
-
-            // ✅ Web share — no Android Context needed
-            onShareRequested = { userId ->
-                shareReferralLinkWeb(userId)
-            },
-
-            // ✅ Web has no native image picker — no-op stub
-            onPickImageRequested = { _ ->
-                // Not supported on web in this KMP setup
-                console.warn("Image picking not supported on web")
-            },
-
-            // ✅ Web has no BitmapFactory — no-op stub, always returns null
-            onDecodeImageRequested = { _, onResult ->
-                onResult(null)
-            },
-
             // ✅ Web has no FCM token saving — no-op stub
             // FCM for web requires a separate Service Worker setup
             onUserLoggedIn = { uid ->
