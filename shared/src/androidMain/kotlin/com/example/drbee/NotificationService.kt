@@ -1,6 +1,7 @@
 package com.example.drbee
 
 import android.content.Context
+import android.util.Log
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.ChildEventListener
@@ -51,12 +52,7 @@ actual class NotificationService actual constructor() {
     // ✅ Listens to notification_queue/{currentUserUid}/
     private fun listenForQueuedNotifications() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (uid.isNullOrBlank()) {
-            android.util.Log.w("FCM", "⚠️ initialize() called before login — queue listener skipped")
-            return
-        }
-
-        android.util.Log.d("FCM", "👂 Listening to notification_queue/$uid")
+        if (uid.isNullOrBlank()) return
 
         FirebaseDatabase
             .getInstance(DB_URL)
@@ -65,36 +61,48 @@ actual class NotificationService actual constructor() {
             .addChildEventListener(object : ChildEventListener {
 
                 override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                    val senderName  = snapshot.child("senderName").getValue(String::class.java)  ?: return
-                    val messageText = snapshot.child("messageText").getValue(String::class.java) ?: return
-                    val senderId    = snapshot.child("senderId").getValue(String::class.java)    ?: return
-                    val roomId      = snapshot.child("roomId").getValue(String::class.java)      ?: return
+                    // 1. Instantly pull and read raw values safely into local memory strings
+                    val senderName  = snapshot.child("senderName").value?.toString()
+                    val messageText = snapshot.child("messageText").value?.toString()
+                    val senderId    = snapshot.child("senderId").value?.toString()
+                    val roomId      = snapshot.child("roomId").value?.toString()
 
-                    android.util.Log.d("FCM", "📬 Queue entry received from $senderName")
+                    if (senderName == null || messageText == null || senderId == null || roomId == null) {
+                        return // Safeguard against broken/incomplete entries
+                    }
 
-                    // ✅ Delete immediately to avoid re-triggering on app restart
-                    snapshot.ref.removeValue()
+                    // Capture a permanent local reference to the database reference path
+                    val nodeReference = snapshot.ref
 
-                    // ✅ Send the actual FCM push
+                    // 2. Fire the network thread first, handling data completely separate from the node deletion
                     CoroutineScope(Dispatchers.IO).launch {
-                        sendPushNotification(
-                            recipientUserId = uid,
-                            senderName      = senderName,
-                            messageText     = messageText,
-                            senderId        = senderId,
-                            roomId          = roomId
-                        )
+                        try {
+                            // Pass the hard variables safely
+                            sendPushNotification(
+                                recipientUserId = uid,
+                                senderName      = senderName,
+                                messageText     = messageText,
+                                senderId        = senderId,
+                                roomId          = roomId
+                            )
+
+                            // 3. ONLY delete the item from the queue AFTER the FCM function finishes executing
+                            withContext(Dispatchers.Main) {
+                                nodeReference.removeValue()
+                            }
+                        } catch (e: Exception) {
+                            Log.e("FCM", "❌ Failed to send queued notification: ${e.message}")
+                        }
                     }
                 }
 
                 override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
                 override fun onChildRemoved(snapshot: DataSnapshot) {}
                 override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
-                override fun onCancelled(error: DatabaseError) {
-                    android.util.Log.e("FCM", "❌ Queue listener cancelled: ${error.message}")
-                }
+                override fun onCancelled(error: DatabaseError) {}
             })
     }
+
 
     actual fun getFcmToken(onToken: (String) -> Unit) {
         FirebaseMessaging.getInstance().token

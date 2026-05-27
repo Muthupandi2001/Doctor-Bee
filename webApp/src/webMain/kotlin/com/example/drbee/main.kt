@@ -14,7 +14,8 @@ fun main() {
 
     val webOptions = FirebaseOptions(
         applicationId = "1:444402775117:web:82608e86b7a6afde1b1804",
-        apiKey        = "AIzaSyBzHwoHb9KhxPDvdPfkOtI8BbjFprgYgXk",
+//        apiKey        = "AIzaSyBzHwoHb9KhxPDvdPfkOtI8BbjFprgYgXk",
+        apiKey        = "AIzaSyAoWD1PhhfBmZSPXvizEGndJtcRf1dtu_A",
         projectId     = "doctor-bee-2d622",
         storageBucket = "doctor-bee-2d622.firebasestorage.app",
         databaseUrl   = "https://doctor-bee-2d622-default-rtdb.firebaseio.com"
