@@ -7,7 +7,6 @@ import android.os.Build
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.messaging.FirebaseMessaging
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.initialize
 
@@ -16,26 +15,24 @@ class DrBeeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // ── 1. Core init ──────────────────────────────────────────────────────
+        // ── 1. Core Firebase init ─────────────────────────────────────────────
         Firebase.initialize(this)
         FirebaseDatabase.getInstance().setPersistenceEnabled(true)
         NotificationService.appContext = applicationContext
 
-        // ── 2. Notification channel (must exist before any notification) ───────
+        // ── 2. Notification channel ───────────────────────────────────────────
         createNotificationChannel()
 
-        // ── 3. NotificationService setup ──────────────────────────────────────
-        NotificationService().initialize()
-
-        // ── 4. Token fetch for already-logged-in user on app start ────────────
-        //    Uses retry — handles SERVICE_NOT_AVAILABLE on new/cold devices
+        // ── 3. Only initialize listener if user is ALREADY logged in
+        //    (returning user opening app again).
+        //    Fresh logins are handled in MainActivity.onUserLoggedIn.
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (!uid.isNullOrBlank()) {
-            Log.d("FCM", "App start — fetching token for uid=$uid")
-            FcmTokenHelper.initForCurrentUser(uid)
+            Log.d("FCM", "App start — user already logged in uid=$uid")
+            NotificationService().initialize()       // attach queue listener
+            FcmTokenHelper.initForCurrentUser(uid)   // refresh FCM token
         } else {
-            // Not logged in yet — onNewToken or flushPendingToken will handle it
-            Log.d("FCM", "App start — no user, token will be saved after login")
+            Log.d("FCM", "App start — no user logged in yet")
         }
     }
 
@@ -46,7 +43,7 @@ class DrBeeApplication : Application() {
                 "Chat Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description   = "DrBee chat message notifications"
+                description = "DrBee chat message notifications"
                 enableLights(true)
                 enableVibration(true)
             }

@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -24,7 +23,10 @@ class MainActivity : ComponentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted -> if (isGranted) fetchAndStoreFcmToken() }
+    ) { isGranted ->
+        Log.d("FCM", "Notification permission granted=$isGranted")
+        if (isGranted) fetchAndStoreFcmToken()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,8 +45,20 @@ class MainActivity : ComponentActivity() {
             App(
                 deepLinkParams = deepLinkParams,
                 onUserLoggedIn = { uid ->
+                    // ✅ This is the KEY fix — called after every login
+                    Log.d("FCM", ">>> onUserLoggedIn callback fired — uid=$uid")
+
+                    // ✅ Step 1: Attach the notification_queue listener now
+                    // that we have a valid uid. This is what makes web→app work.
+                    NotificationService().initialize()
+
+                    // ✅ Step 2: Save/refresh FCM token for this user
                     FcmTokenHelper.saveTokenForUser(uid)
+
+                    // ✅ Step 3: Flush any token that arrived before login
                     MyFCMService.flushPendingToken(uid)
+
+                    Log.d("FCM", ">>> onUserLoggedIn setup complete for uid=$uid")
                 }
             )
         }
@@ -61,17 +75,16 @@ class MainActivity : ComponentActivity() {
         deepLinkParams = if (data?.scheme == "drbee" && data.host == "open") {
             val screen     = data.getQueryParameter("screen")
             val referrerId = data.getQueryParameter("referrerId")
-            Log.d("DrBeeDeepLink", "screen=$screen, referrerId=$referrerId")
-//            if (screen == "referral" && referrerId != null) {
-//                Toast.makeText(this, "Welcome! Referred by: $referrerId", Toast.LENGTH_LONG).show()
-//            }
+            Log.d("DrBeeDeepLink", "screen=$screen referrerId=$referrerId")
             DeepLinkParams(screen, referrerId)
         } else null
     }
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            notificationPermissionLauncher.launch(
+                android.Manifest.permission.POST_NOTIFICATIONS
+            )
         } else {
             fetchAndStoreFcmToken()
         }
@@ -79,15 +92,20 @@ class MainActivity : ComponentActivity() {
 
     private fun fetchAndStoreFcmToken() {
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            Log.d("FCM", "fetchAndStoreFcmToken — token fetched")
             val uid = FirebaseAuth.getInstance().currentUser?.uid
-            if (!uid.isNullOrBlank()) MyFCMService.saveTokenToDatabase(uid, token)
-            else MyFCMService.pendingToken = token
+            if (!uid.isNullOrBlank()) {
+                MyFCMService.saveTokenToDatabase(uid, token)
+            } else {
+                Log.d("FCM", "No user yet — storing as pendingToken")
+                MyFCMService.pendingToken = token
+            }
         }
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
         val senderId = intent?.getStringExtra("OPEN_SENDER_ID") ?: return
         val roomId   = intent.getStringExtra("OPEN_ROOM_ID")   ?: return
-        Log.d("FCM", "Notification tapped: senderId=$senderId roomId=$roomId")
+        Log.d("FCM", "Notification tapped — senderId=$senderId roomId=$roomId")
     }
 }

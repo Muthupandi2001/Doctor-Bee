@@ -24,10 +24,13 @@ import java.net.URL
 actual class NotificationService actual constructor() {
 
     companion object {
+        private const val TAG        = "FCM"
         private const val PROJECT_ID = "doctor-bee-2d622"
-        private const val DB_URL = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
-        private const val FCM_URL = "https://fcm.googleapis.com/v1/projects/$PROJECT_ID/messages:send"
-        private const val SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
+        private const val DB_URL     = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
+        private const val FCM_URL    = "https://fcm.googleapis.com/v1/projects/$PROJECT_ID/messages:send"
+        private const val SCOPE      = "https://www.googleapis.com/auth/firebase.messaging"
+
+        @Volatile private var listeningUid: String? = null
 
         var appContext: Context? = null
             get() {
@@ -37,22 +40,69 @@ actual class NotificationService actual constructor() {
                     val method = activityThread.getMethod("currentApplication")
                     method.invoke(null) as? Context
                 } catch (e: Exception) {
-                    android.util.Log.e("FCM", "❌ Cannot get context: ${e.message}")
+                    Log.e(TAG, "❌ Cannot get context: ${e.message}")
                     null
                 }
             }
     }
 
-    // ✅ Called after login — starts listening to notification_queue
     actual fun initialize() {
+        Log.d(TAG, ">>> initialize() called")
         FirebaseMessaging.getInstance().isAutoInitEnabled = true
-        listenForQueuedNotifications()   // ← THIS was missing
+        listenForQueuedNotifications()
+        // ✅ Publish fresh OAuth token to DB so web can use it
+        publishOAuthTokenToDb()
     }
 
-    // ✅ Listens to notification_queue/{currentUserUid}/
+    // ✅ NEW: Writes a fresh short-lived OAuth token into Firebase DB
+    // Web reads this token to call FCM V1 API directly
+    private fun publishOAuthTokenToDb() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val ctx = appContext ?: return@launch
+                val credentials = GoogleCredentials
+                    .fromStream(ctx.assets.open("service_account.json"))
+                    .createScoped(listOf(SCOPE))
+                credentials.refreshIfExpired()
+                val token     = credentials.accessToken.tokenValue
+                val expiresAt = credentials.accessToken.expirationTime?.time
+                    ?: (System.currentTimeMillis() + 3600_000)
+
+                val tokenObj = JSONObject().apply {
+                    put("token",     token)
+                    put("expiresAt", expiresAt)
+                }
+
+                FirebaseDatabase.getInstance(DB_URL)
+                    .getReference("fcm_oauth_token")
+                    .setValue(tokenObj.toString())
+                    .addOnSuccessListener {
+                        Log.d(TAG, "✅ OAuth token published to DB")
+                    }
+                    .addOnFailureListener {
+                        Log.e(TAG, "❌ Failed to publish OAuth token: ${it.message}")
+                    }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ publishOAuthTokenToDb error: ${e.message}")
+            }
+        }
+    }
+
     private fun listenForQueuedNotifications() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
-        if (uid.isNullOrBlank()) return
+        Log.d(TAG, ">>> listenForQueuedNotifications() uid=$uid")
+
+        if (uid.isNullOrBlank()) {
+            Log.w(TAG, "⚠ No user — skipping")
+            return
+        }
+        if (listeningUid == uid) {
+            Log.d(TAG, "ℹ Already listening uid=$uid")
+            return
+        }
+        listeningUid = uid
+        Log.d(TAG, "✅ Attaching listener notification_queue/$uid")
 
         FirebaseDatabase
             .getInstance(DB_URL)
@@ -60,24 +110,27 @@ actual class NotificationService actual constructor() {
             .child(uid)
             .addChildEventListener(object : ChildEventListener {
 
-                override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
-                    // 1. Instantly pull and read raw values safely into local memory strings
+                override fun onChildAdded(snapshot: DataSnapshot, prev: String?) {
+                    Log.d(TAG, ">>> onChildAdded key=${snapshot.key}")
+                    Log.d(TAG, ">>> raw value=${snapshot.value}")
+
                     val senderName  = snapshot.child("senderName").value?.toString()
                     val messageText = snapshot.child("messageText").value?.toString()
                     val senderId    = snapshot.child("senderId").value?.toString()
                     val roomId      = snapshot.child("roomId").value?.toString()
 
-                    if (senderName == null || messageText == null || senderId == null || roomId == null) {
-                        return // Safeguard against broken/incomplete entries
+                    Log.d(TAG, ">>> senderName=$senderName messageText=$messageText")
+
+                    if (senderName == null || messageText == null ||
+                        senderId == null || roomId == null) {
+                        Log.e(TAG, "❌ Incomplete entry — deleting")
+                        snapshot.ref.removeValue()
+                        return
                     }
 
-                    // Capture a permanent local reference to the database reference path
-                    val nodeReference = snapshot.ref
-
-                    // 2. Fire the network thread first, handling data completely separate from the node deletion
+                    val nodeRef = snapshot.ref
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
-                            // Pass the hard variables safely
                             sendPushNotification(
                                 recipientUserId = uid,
                                 senderName      = senderName,
@@ -85,77 +138,74 @@ actual class NotificationService actual constructor() {
                                 senderId        = senderId,
                                 roomId          = roomId
                             )
-
-                            // 3. ONLY delete the item from the queue AFTER the FCM function finishes executing
                             withContext(Dispatchers.Main) {
-                                nodeReference.removeValue()
+                                nodeRef.removeValue()
+                                Log.d(TAG, "✅ Queue entry removed")
                             }
                         } catch (e: Exception) {
-                            Log.e("FCM", "❌ Failed to send queued notification: ${e.message}")
+                            Log.e(TAG, "❌ Failed: ${e.message}")
                         }
                     }
                 }
 
-                override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {}
+                override fun onChildChanged(snapshot: DataSnapshot, prev: String?) {}
                 override fun onChildRemoved(snapshot: DataSnapshot) {}
-                override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
-                override fun onCancelled(error: DatabaseError) {}
+                override fun onChildMoved(snapshot: DataSnapshot, prev: String?) {}
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e(TAG, "❌ Cancelled: ${error.message}")
+                    listeningUid = null
+                }
             })
     }
 
-
     actual fun getFcmToken(onToken: (String) -> Unit) {
         FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { token: String -> onToken(token) }
-            .addOnFailureListener { e ->
-                android.util.Log.e("FCM", "Token fetch failed: ${e.message}")
-            }
+            .addOnSuccessListener { onToken(it) }
+            .addOnFailureListener { Log.e(TAG, "❌ Token failed: ${it.message}") }
     }
 
     actual suspend fun sendPushNotification(
-        recipientUserId: String,
-        senderName: String,
-        messageText: String,
-        senderId: String,
-        roomId: String
+        recipientUserId : String,
+        senderName      : String,
+        messageText     : String,
+        senderId        : String,
+        roomId          : String
     ) = withContext(Dispatchers.IO) {
+        Log.d(TAG, ">>> sendPushNotification recipient=$recipientUserId")
         try {
             val ctx = appContext ?: run {
-                android.util.Log.e("FCM", "❌ appContext is null")
+                Log.e(TAG, "❌ appContext null")
                 return@withContext
             }
 
-            // Step 1: Fetch recipient FCM token from DB
-            val tokenSnapshot = Firebase.database(DB_URL)
+            // Fetch recipient token
+            val tokenSnap = Firebase.database(DB_URL)
                 .reference("fcm_tokens")
                 .child(recipientUserId)
-                .valueEvents
-                .first()
+                .valueEvents.first()
 
-            val recipientToken = tokenSnapshot.value as? String
+            val recipientToken = tokenSnap.value as? String
             if (recipientToken.isNullOrBlank()) {
-                android.util.Log.e("FCM", "❌ No FCM token for $recipientUserId")
+                Log.e(TAG, "❌ No FCM token for $recipientUserId")
                 return@withContext
             }
 
-            // Step 2: Get OAuth2 access token from service account
+            // Get OAuth token
             val credentials = GoogleCredentials
                 .fromStream(ctx.assets.open("service_account.json"))
                 .createScoped(listOf(SCOPE))
             credentials.refreshIfExpired()
             val accessToken = credentials.accessToken.tokenValue
 
-            // Step 3: Build FCM V1 payload
+            val truncated = if (messageText.length > 100)
+                messageText.substring(0, 100) + "…" else messageText
+
             val payload = JSONObject().apply {
                 put("message", JSONObject().apply {
                     put("token", recipientToken)
                     put("notification", JSONObject().apply {
                         put("title", senderName)
-                        put("body",
-                            if (messageText.length > 100)
-                                messageText.substring(0, 100) + "…"
-                            else messageText
-                        )
+                        put("body", truncated)
                     })
                     put("data", JSONObject().apply {
                         put("senderId", senderId)
@@ -172,14 +222,13 @@ actual class NotificationService actual constructor() {
                 })
             }
 
-            // Step 4: POST to FCM V1 endpoint
             val connection = (URL(FCM_URL).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Authorization", "Bearer $accessToken")
                 setRequestProperty("Content-Type", "application/json; UTF-8")
-                doOutput = true
+                doOutput      = true
                 connectTimeout = 10_000
-                readTimeout = 10_000
+                readTimeout    = 10_000
             }
 
             OutputStreamWriter(connection.outputStream, "UTF-8").use {
@@ -188,20 +237,18 @@ actual class NotificationService actual constructor() {
             }
 
             val code = connection.responseCode
-            val responseBody = if (code == 200)
+            val body = if (code == 200)
                 connection.inputStream.bufferedReader().readText()
             else
-                connection.errorStream?.bufferedReader()?.readText() ?: "no error body"
+                connection.errorStream?.bufferedReader()?.readText() ?: "no body"
 
-            if (code == 200)
-                android.util.Log.d("FCM", "✅ Push sent to $recipientUserId")
-            else
-                android.util.Log.e("FCM", "❌ FCM error $code: $responseBody")
+            if (code == 200) Log.d(TAG, "✅ Push sent to $recipientUserId")
+            else Log.e(TAG, "❌ FCM error $code: $body")
 
             connection.disconnect()
 
         } catch (e: Exception) {
-            android.util.Log.e("FCM", "❌ Exception: ${e.message}", e)
+            Log.e(TAG, "❌ Exception: ${e.message}", e)
         }
     }
 }

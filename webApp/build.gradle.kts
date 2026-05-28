@@ -32,6 +32,8 @@ kotlin {
             implementation("dev.gitlive:firebase-auth:1.13.0")
 
             implementation("dev.gitlive:firebase-database:1.13.0")
+
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
         }
     }
 }
