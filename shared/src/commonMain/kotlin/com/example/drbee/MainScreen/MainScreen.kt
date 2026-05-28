@@ -16,6 +16,7 @@ import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.example.drbee.ChatActivity.ChatActivity
+import com.example.drbee.CommunityScreen.CommunityScreen
 import com.example.drbee.ProfileScreen.ProfileScreen
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
@@ -65,8 +66,8 @@ fun MainScreen(
         ) {
             when (selectedTab) {
                 BottomTab.Home    -> HomeScreen()
-                BottomTab.Search  -> SearchScreen()   // ✅ no lambda param
-                BottomTab.Camera  -> CameraScreen()
+                BottomTab.Search  -> SearchScreen()
+                BottomTab.Camera  -> CommunityScreen()
                 BottomTab.Profile -> ProfileScreen(
                     navController   = navController,
                     onLogoutSuccess = onLogoutSuccess

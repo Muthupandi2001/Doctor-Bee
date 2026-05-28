@@ -1,6 +1,7 @@
 // androidMain/kotlin/com/example/drbee/ImagePicker.android.kt
 package com.example.drbee
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -17,7 +18,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import java.io.ByteArrayOutputStream
 import android.app.Activity
+import android.content.ContentValues
+import android.content.pm.PackageManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import java.lang.ref.WeakReference
+
 actual fun decodeBase64ToImageBitmap(base64: String): ImageBitmap? = try {
     val bytes = Base64.decode(base64, Base64.DEFAULT)
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
@@ -86,3 +94,70 @@ object ActivityProvider {
     fun get(): Activity = activityRef?.get()
         ?: error("ActivityProvider not initialized — call set() in MainActivity.onCreate")
 }
+
+@Composable
+actual fun rememberCameraLauncher(onResult: (base64: String) -> Unit): ImagePickerLauncher {
+    val context   = LocalContext.current
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Permission launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* handled below */ }
+
+    // Camera capture launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (!success) return@rememberLauncherForActivityResult
+        val uri = cameraUri ?: return@rememberLauncherForActivityResult
+        try {
+            val stream = context.contentResolver.openInputStream(uri) ?: return@rememberLauncherForActivityResult
+            val bitmap = BitmapFactory.decodeStream(stream)
+            stream.close()
+            onResult(bitmapToBase64(bitmap))
+        } catch (e: Exception) { /* ignore */ }
+    }
+
+    return remember {
+        ImagePickerLauncher {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasPermission) {
+                val uri = createCameraUri(context)
+                cameraUri = uri
+                cameraLauncher.launch(uri)
+            } else {
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
+    }
+}
+
+private fun bitmapToBase64(bitmap: Bitmap): String {
+    val stream = ByteArrayOutputStream()
+    // Resize if too large to avoid memory issues
+    val maxSize = 800
+    val scaled = if (bitmap.width > maxSize || bitmap.height > maxSize) {
+        val ratio = minOf(maxSize.toFloat() / bitmap.width, maxSize.toFloat() / bitmap.height)
+        Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * ratio).toInt(),
+            (bitmap.height * ratio).toInt(),
+            true
+        )
+    } else bitmap
+    scaled.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+    return Base64.encodeToString(stream.toByteArray(), Base64.DEFAULT)
+}
+private fun createCameraUri(context: Context): Uri {
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "community_photo_${System.currentTimeMillis()}.jpg")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+    }
+    return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+}
+
+actual fun currentTimeMillis(): Long = System.currentTimeMillis()

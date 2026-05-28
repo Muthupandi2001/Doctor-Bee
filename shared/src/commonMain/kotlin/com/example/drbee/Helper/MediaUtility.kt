@@ -13,5 +13,9 @@ expect class ImagePickerLauncher {
 @Composable
 expect fun rememberImagePickerLauncher(onResult: (base64: String) -> Unit): ImagePickerLauncher
 
+@Composable
+expect fun rememberCameraLauncher(onResult: (base64: String) -> Unit): ImagePickerLauncher
 
 expect fun shareReferralLink(userId: String)
+
+expect fun currentTimeMillis(): Long

@@ -9,6 +9,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
+import com.example.drbee.currentTimeMillis
 import drbee.shared.generated.resources.Res
 import drbee.shared.generated.resources.font_bold
 import drbee.shared.generated.resources.font_extrabold
@@ -135,3 +136,35 @@ object Logger {
  val BeeBrown = Color(0xFF3E2723)
 val BeeCard = Color(0xFFFFFFFF)
 
+
+/*------------------------------------------------------------------------------------------------*/
+/*Community Screen Datas*/
+
+ fun Any?.toSafeLong(): Long = when (this) {
+    is Long   -> this
+    is Double -> this.toLong()
+    is Int    -> this.toLong()
+    is String -> this.toLongOrNull() ?: 0L
+    else      -> 0L
+}
+
+ fun Any?.toSafeInt(): Int = when (this) {
+    is Long   -> this.toInt()
+    is Double -> this.toInt()
+    is Int    -> this
+    is String -> this.toIntOrNull() ?: 0
+    else      -> 0
+}
+
+fun formatTimestamp(ts: Long): String {
+    if (ts == 0L) return ""
+    val now   = currentTimeMillis()
+    val diffS = (now - ts) / 1000
+    return when {
+        diffS < 60        -> "just now"
+        diffS < 3600      -> "${diffS / 60}m ago"
+        diffS < 86400     -> "${diffS / 3600}h ago"
+        diffS < 86400 * 7 -> "${diffS / 86400}d ago"
+        else              -> "${diffS / (86400 * 7)}w ago"
+    }
+}

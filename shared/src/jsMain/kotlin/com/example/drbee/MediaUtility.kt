@@ -2,7 +2,6 @@
 package com.example.drbee
 
 import androidx.compose.runtime.*
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeImageBitmap
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -11,10 +10,22 @@ import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLImageElement
 import org.w3c.dom.CanvasRenderingContext2D
 import org.w3c.files.Blob
-import org.w3c.files.FileReader
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jetbrains.skia.Bitmap
 import kotlin.coroutines.resume
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.browser.document
+import org.w3c.dom.HTMLInputElement
+import org.w3c.dom.events.Event
+import org.w3c.files.FileReader
+import kotlin.js.Promise
+//actual fun currentTimeMillis(): Long = js("Date.now()").unsafeCast<Double>().toLong()
+//
+actual fun currentTimeMillis(): Long {
+    // JS Number is always Double; cast explicitly before toLong
+    return (js("Date.now()") as Double).toLong()
+}
 
 actual fun decodeBase64ToImageBitmap(base64: String): ImageBitmap? = try {
     val cleanBase64 = base64.substringAfter(",")
@@ -134,4 +145,54 @@ actual fun shareReferralLink(userId: String) {
         window.navigator.clipboard.writeText(text)
         window.alert("Invite link copied to clipboard!")
     }
+}
+
+
+@Composable
+actual fun rememberCameraLauncher(onResult: (base64: String) -> Unit): ImagePickerLauncher {
+    val callback by rememberUpdatedState(onResult)
+    return remember {
+        ImagePickerLauncher {
+            // capture="camera" on mobile web opens camera directly
+            // On desktop it falls back to file picker
+            val input = createFileInput(
+                accept  = "image/*",
+                capture = "camera"
+            ) { base64 ->
+                callback(base64)
+            }
+            document.body?.appendChild(input)
+            input.click()
+            input.addEventListener("change", {
+                document.body?.removeChild(input)
+            })
+        }
+    }
+}
+private fun createFileInput(
+    accept  : String,
+    capture : String? = null,
+    onResult: (String) -> Unit
+): HTMLInputElement {
+    val input = document.createElement("input") as HTMLInputElement
+    input.type   = "file"
+    input.accept = accept
+    if (capture != null) input.setAttribute("capture", capture)
+    input.style.display = "none"
+
+    input.onchange = { _: Event ->
+        val file = input.files?.item(0)
+
+        // Use a null check instead of 'return' to avoid type mismatch
+        if (file != null) {
+            val reader = FileReader()
+            reader.onload = { event ->
+                val result = event.target.asDynamic().result as? String ?: ""
+                val base64 = if (result.contains(",")) result.substringAfter(",") else result
+                onResult(base64)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+    return input
 }
