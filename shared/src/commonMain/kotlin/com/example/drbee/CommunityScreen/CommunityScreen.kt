@@ -167,54 +167,52 @@ fun CommunityScreen() {
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        Scaffold(
-            containerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-        )
-        { padding ->
-            Column {
-                CommunityTopBar(gradient = gradient)
+//        Scaffold(
+//            containerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
+//        )
+//        { padding ->
+//        }
 
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentPadding = PaddingValues(bottom = 90.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                )
-                {
-                    if (displayedPosts.isEmpty()) {
-                        item { CommunityEmptyState() }
-                    }
+        Column {
+            CommunityTopBar(gradient = gradient)
 
-                    items(items = displayedPosts, key = { it.id }) { post ->
-                        CommunityPostCard(
-                            post = post,
-                            currentUserId = currentUserId,
-                            onLike = { isLiked -> toggleLike(post, currentUserId, isLiked, scope) },
-                            onComment = { selectedPostForComment = post },
-                            onShare = { sharePost(post) }
-                        )
-                    }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 20.dp, top = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            )
+            {
+                if (displayedPosts.isEmpty()) {
+                    item { CommunityEmptyState() }
+                }
 
-                    if (isLoadingMore || displayedPosts.size < allPosts.size) {
-                        item {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = WonderBeeTheme.materialScheme.primary,
-                                    modifier = Modifier.size(28.dp),
-                                    strokeWidth = 2.5.dp
-                                )
-                            }
+                items(items = displayedPosts, key = { it.id }) { post ->
+                    CommunityPostCard(
+                        post = post,
+                        currentUserId = currentUserId,
+                        onLike = { isLiked -> toggleLike(post, currentUserId, isLiked, scope) },
+                        onComment = { selectedPostForComment = post },
+                        onShare = { sharePost(post) }
+                    )
+                }
+
+                if (isLoadingMore || displayedPosts.size < allPosts.size) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = WonderBeeTheme.materialScheme.primary,
+                                modifier = Modifier.size(28.dp),
+                                strokeWidth = 2.5.dp
+                            )
                         }
                     }
                 }
             }
-
-
         }
 
         CommunityFab(
@@ -534,7 +532,7 @@ fun CommunityPostCard(
                     onClick = { onLike(isLiked) }
                 )
                 PostActionButton(
-                    icon = Icons.Outlined.ChatBubbleOutline,
+                    icon = Icons.Outlined.Comment,
                     label = "${post.commentCount}",
                     tint = WonderBeeTheme.materialScheme.onSurface.copy(alpha = 0.5f),
                     onClick = onComment

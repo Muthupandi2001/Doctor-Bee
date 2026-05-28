@@ -24,9 +24,9 @@ import com.example.drbee.ProfileScreen.WonderBeeTheme
 sealed class BottomTab(val route: String) {
     data object Home    : BottomTab("home")
     data object Search  : BottomTab("search")
-    data object Camera  : BottomTab("camera")
     data object Chat    : BottomTab("chat")
     data object Profile : BottomTab("profile")
+    data object Community : BottomTab("community")
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -34,9 +34,8 @@ sealed class BottomTab(val route: String) {
 fun MainScreen(
     navController   : NavController,
     onLogoutSuccess : () -> Unit
-    // ✅ onShareRequested, onPickImageRequested, onDecodeImageRequested all removed
 ) {
-    var selectedTab      by remember { mutableStateOf<BottomTab>(BottomTab.Camera) }
+    var selectedTab      by remember { mutableStateOf<BottomTab>(BottomTab.Community) }
     var isChatDetailOpen by remember { mutableStateOf(false) }
 
     val navigationEventState = rememberNavigationEventState(
@@ -67,7 +66,7 @@ fun MainScreen(
             when (selectedTab) {
                 BottomTab.Home    -> HomeScreen()
                 BottomTab.Search  -> SearchScreen()
-                BottomTab.Camera  -> CommunityScreen()
+                BottomTab.Community  -> CommunityScreen()
                 BottomTab.Profile -> ProfileScreen(
                     navController   = navController,
                     onLogoutSuccess = onLogoutSuccess
@@ -144,40 +143,64 @@ fun BottomBar(
             colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
         )
 
-        // Center FAB
-        Box(
-            modifier         = Modifier.padding(6.dp).size(60.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            val fabBrush = if (ThemePreferencesManager.isCustomColorEnabled) {
-                Brush.horizontalGradient(listOf(
-                    ThemePreferencesManager.customColorStart,
-                    ThemePreferencesManager.customColorEnd
-                ))
-            } else {
-                Brush.horizontalGradient(listOf(
-                    WonderBeeTheme.materialScheme.primary,
-                    WonderBeeTheme.materialScheme.secondary
-                ))
-            }
 
-            FloatingActionButton(
-                onClick        = { onSelect(BottomTab.Camera) },
-                modifier       = Modifier
-                    .size(52.dp)
-                    .background(brush = fabBrush, shape = CircleShape),
-                containerColor = Color.Transparent,
-                contentColor   = WonderBeeTheme.materialScheme.onPrimary,
-                elevation      = FloatingActionButtonDefaults.elevation(0.dp),
-                shape          = CircleShape
-            ) {
+        NavigationBarItem(
+            selected = selected == BottomTab.Community,
+            onClick  = { onSelect(BottomTab.Community) },
+            icon = {
                 Icon(
-                    imageVector        = Icons.Default.Add,
-                    contentDescription = "Camera",
-                    modifier           = Modifier.size(28.dp)
+                    imageVector        = Icons.Default.Celebration,
+                    contentDescription = null,
+                    modifier           = if (selected == BottomTab.Community)
+                        Modifier.applyGradientTint(activeGradient) else Modifier,
+                    tint               = if (selected == BottomTab.Community) Color.White else unselectedColor
                 )
-            }
-        }
+            },
+            label = {
+                Text(
+                    text     = "Today",
+                    modifier = if (selected == BottomTab.Community)
+                        Modifier.applyGradientTint(activeGradient) else Modifier,
+                    color    = if (selected == BottomTab.Community) Color.White else unselectedColor
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+        )
+
+//        Box(
+//            modifier         = Modifier.padding(6.dp).size(60.dp),
+//            contentAlignment = Alignment.Center
+//        )
+//        {
+//            val fabBrush = if (ThemePreferencesManager.isCustomColorEnabled) {
+//                Brush.horizontalGradient(listOf(
+//                    ThemePreferencesManager.customColorStart,
+//                    ThemePreferencesManager.customColorEnd
+//                ))
+//            } else {
+//                Brush.horizontalGradient(listOf(
+//                    WonderBeeTheme.materialScheme.primary,
+//                    WonderBeeTheme.materialScheme.secondary
+//                ))
+//            }
+//
+//            FloatingActionButton(
+//                onClick        = { onSelect(BottomTab.Camera) },
+//                modifier       = Modifier
+//                    .size(52.dp)
+//                    .background(brush = fabBrush, shape = CircleShape),
+//                containerColor = Color.Transparent,
+//                contentColor   = WonderBeeTheme.materialScheme.onPrimary,
+//                elevation      = FloatingActionButtonDefaults.elevation(0.dp),
+//                shape          = CircleShape
+//            ) {
+//                Icon(
+//                    imageVector        = Icons.Default.Add,
+//                    contentDescription = "Camera",
+//                    modifier           = Modifier.size(28.dp)
+//                )
+//            }
+//        }
 
         NavigationBarItem(
             selected = selected == BottomTab.Chat,
