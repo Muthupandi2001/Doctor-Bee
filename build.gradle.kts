@@ -9,4 +9,7 @@ plugins {
 
     // 1. Add the Google Services dependency alias here
     alias(libs.plugins.googleServices) apply false
+
+    id("com.google.firebase.crashlytics") version "3.0.7" apply false
+
 }

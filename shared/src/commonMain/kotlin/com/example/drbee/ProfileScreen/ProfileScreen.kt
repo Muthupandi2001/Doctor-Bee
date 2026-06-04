@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.drbee.ChatActivity.FirebaseChatModel
 import com.example.drbee.Helper.SessionManager
+import com.example.drbee.NavHost.NavRoutes
 import com.example.drbee.ProfileScreen.ThemePreferencesManager.isCustomColorEnabled
 import com.example.drbee.decodeBase64ToImageBitmap
 import dev.gitlive.firebase.Firebase
@@ -173,7 +174,7 @@ fun ProfileScreen(navController: NavController,onLogoutSuccess: () -> Unit) {
                     .size(100.dp)
                     .clip(CircleShape)
                     .clickable(){
-                        navController.navigate("profile/$currentUid")
+                        navController.navigate(NavRoutes.editprofile(currentUid))
                     }
                     .background(Color.Transparent),
                 contentAlignment = Alignment.Center

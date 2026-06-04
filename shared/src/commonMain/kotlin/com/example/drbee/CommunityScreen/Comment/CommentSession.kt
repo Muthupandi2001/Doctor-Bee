@@ -47,7 +47,7 @@ import com.example.drbee.CommunityScreen.ModelClass.CommunityComment
 import com.example.drbee.CommunityScreen.ModelClass.CommunityPost
 
 import com.example.drbee.CommunityScreen.Post.postComment
-import com.example.drbee.Helper.DB_URL
+import com.example.drbee.Helper.AppConfig
 import com.example.drbee.Helper.formatTimestamp
 import com.example.drbee.Helper.toSafeLong
 import com.example.drbee.ProfileScreen.WonderBeeTheme
@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
 
     LaunchedEffect(post.id) {
         try {
-            Firebase.database(DB_URL)
+            Firebase.database(AppConfig.DB_URL)
                 .reference("community_comments")
                 .child(post.id)
                 .valueEvents

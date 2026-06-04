@@ -22,7 +22,8 @@ actual class NotificationService actual constructor() {
         senderName      : String,
         messageText     : String,
         senderId        : String,
-        roomId          : String
+        roomId          : String,
+        isChat          : Boolean   // ✅ added
     ) {
         try {
             // ── Step 1: Read OAuth token that Android published to DB ──────────
@@ -31,28 +32,27 @@ actual class NotificationService actual constructor() {
                 .valueEvents
                 .first()
 
-            val oauthJson  = oauthSnap.value as? String
+            val oauthJson = oauthSnap.value as? String
             if (oauthJson.isNullOrBlank()) {
                 println("❌ [FCM-JS] No OAuth token in DB — using queue fallback")
-                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
                 return
             }
 
-            // Parse token and check expiry
             val parsed    = JSON.parse<dynamic>(oauthJson)
-            val token     = parsed.token  as? String
+            val token     = parsed.token     as? String
             val expiresAt = parsed.expiresAt as? Double
 
             if (token.isNullOrBlank()) {
                 println("❌ [FCM-JS] OAuth token missing — using queue fallback")
-                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
                 return
             }
 
             val now = Date().getTime()
             if (expiresAt != null && now >= expiresAt - 60_000) {
                 println("⚠ [FCM-JS] OAuth token expired — using queue fallback")
-                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
                 return
             }
 
@@ -66,7 +66,7 @@ actual class NotificationService actual constructor() {
             val recipientToken = tokenSnap.value as? String
             if (recipientToken.isNullOrBlank()) {
                 println("❌ [FCM-JS] No FCM token for uid=$recipientUserId — queue fallback")
-                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
                 return
             }
 
@@ -81,7 +81,7 @@ actual class NotificationService actual constructor() {
             val dataObj = js("({})")
             dataObj.senderId = senderId.toString()
             dataObj.roomId   = roomId.toString()
-            dataObj.type     = "chat_message"
+            dataObj.type     = if (isChat) "chat_message" else "community"  // ✅
 
             val androidNotif = js("({})")
             androidNotif.channel_id = "drbee_chat_channel"
@@ -121,12 +121,12 @@ actual class NotificationService actual constructor() {
                 println("✅ [FCM-JS] Response: $responseText")
             } else {
                 println("❌ [FCM-JS] FCM error ${response.status}: $responseText")
-                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+                writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
             }
 
         } catch (e: Exception) {
             println("❌ [FCM-JS] Exception: ${e.message}")
-            writeToQueue(recipientUserId, senderName, messageText, senderId, roomId)
+            writeToQueue(recipientUserId, senderName, messageText, senderId, roomId, isChat)
         }
     }
 
@@ -135,7 +135,8 @@ actual class NotificationService actual constructor() {
         senderName      : String,
         messageText     : String,
         senderId        : String,
-        roomId          : String
+        roomId          : String,
+        isChat          : Boolean   // ✅ added
     ) {
         try {
             val uniqueKey = Date().getTime().toLong().toString()
@@ -145,12 +146,14 @@ actual class NotificationService actual constructor() {
                 messageText: '',
                 senderId:    '',
                 roomId:      '',
+                isChat:      false,
                 timestamp:   ''
             }""")
             jsPayload.senderName  = senderName.toString()
             jsPayload.messageText = messageText.toString()
             jsPayload.senderId    = senderId.toString()
             jsPayload.roomId      = roomId.toString()
+            jsPayload.isChat      = isChat          // ✅ stored so Android reads it
             jsPayload.timestamp   = uniqueKey.toString()
 
             Firebase.database(DB_URL)

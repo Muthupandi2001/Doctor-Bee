@@ -5,9 +5,14 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+
 }
 
 dependencies {
+
+    implementation("com.google.firebase:firebase-crashlytics")
+    implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-messaging:24.0.0")
 
     // Google Auth (for OAuth2 / service account)

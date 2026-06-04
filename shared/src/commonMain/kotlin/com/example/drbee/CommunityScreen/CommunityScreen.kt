@@ -24,7 +24,7 @@ import com.example.drbee.CommunityScreen.Post.deletePost
 import com.example.drbee.CommunityScreen.Post.editPost
 import com.example.drbee.CommunityScreen.Post.sharePost
 import com.example.drbee.CommunityScreen.Post.toggleLike
-import com.example.drbee.Helper.DB_URL
+import com.example.drbee.Helper.AppConfig
 import com.example.drbee.Helper.PAGE_SIZE
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.Helper.formatTimestamp
@@ -95,7 +95,7 @@ fun CommunityScreen() {
         }
         if (currentUserId.isNotBlank()) {
             runCatching {
-                val snap = Firebase.database(DB_URL)
+                val snap = Firebase.database(AppConfig.DB_URL)
                     .reference("users")
                     .child(currentUserId)
                     .child("name")
@@ -109,7 +109,7 @@ fun CommunityScreen() {
 
     LaunchedEffect(Unit) {
         try {
-            Firebase.database(DB_URL)
+            Firebase.database(AppConfig.DB_URL)
                 .reference("community_posts")
                 .valueEvents
                 .collect { snapshot ->
@@ -327,7 +327,7 @@ fun CommunityPostCard(
     LaunchedEffect(post.id, currentUserId) {
         if (currentUserId.isBlank() || post.id.isBlank()) return@LaunchedEffect
         try {
-            Firebase.database(DB_URL)
+            Firebase.database(AppConfig.DB_URL)
                 .reference("community_likes")
                 .child(post.id)
                 .child(currentUserId)
@@ -861,7 +861,7 @@ private fun UploadPostDialog(
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
             runCatching {
-                val snap = Firebase.database(DB_URL)
+                val snap = Firebase.database(AppConfig.DB_URL)
                     .reference("users")
                     .child(currentUserId)
                     .child("profileImage")
@@ -1107,7 +1107,7 @@ private suspend fun publishPost(
 ) {
     if (currentUserId.isBlank()) return
     try {
-        val db = Firebase.database(DB_URL)
+        val db = Firebase.database(AppConfig.DB_URL)
         val postsRef = db.reference("community_posts")
         val postRef = postsRef.push()
         val postId = postRef.key ?: "post_${currentUserId}_${currentTimeMillis()}"
@@ -1142,7 +1142,7 @@ private suspend fun broadcastNewPostNotification(
     notifService: NotificationService
 ) {
     try {
-        val usersSnap = Firebase.database(DB_URL).reference("users").valueEvents.first()
+        val usersSnap = Firebase.database(AppConfig.DB_URL).reference("users").valueEvents.first()
         usersSnap.children.forEach { child ->
             val uid = child.key ?: return@forEach
             if (uid == senderId) return@forEach
@@ -1152,7 +1152,8 @@ private suspend fun broadcastNewPostNotification(
                     senderName = senderName,
                     messageText = description.take(100).ifEmpty { "📷 New post" },
                     senderId = senderId,
-                    roomId = "community"
+                    roomId = "community",
+                    false
                 )
             } catch (e: Exception) {
                 Napier.e("Notify $uid failed: ${e.message}")

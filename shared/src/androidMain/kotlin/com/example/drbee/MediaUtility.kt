@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import java.lang.ref.WeakReference
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 actual fun decodeBase64ToImageBitmap(base64: String): ImageBitmap? = try {
     val bytes = Base64.decode(base64, Base64.DEFAULT)
@@ -161,3 +162,24 @@ private fun createCameraUri(context: Context): Uri {
 }
 
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
+
+
+// androidMain/src/androidMain/kotlin/KmpLogger.android.kt
+
+
+actual fun logCrashMessage(message: String) {
+    try {
+        FirebaseCrashlytics.getInstance().log(message)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+actual fun logCrashException(throwable: Throwable) {
+    try {
+        FirebaseCrashlytics.getInstance().recordException(throwable)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+

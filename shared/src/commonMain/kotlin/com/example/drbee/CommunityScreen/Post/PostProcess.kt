@@ -1,6 +1,6 @@
 package com.example.drbee.CommunityScreen.Post
 import com.example.drbee.CommunityScreen.ModelClass.CommunityPost
-import com.example.drbee.Helper.DB_URL
+import com.example.drbee.Helper.AppConfig
 import com.example.drbee.Helper.toSafeInt
 import com.example.drbee.currentTimeMillis
 import com.example.drbee.shareReferralLink
@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 ) {
     if (postId.isBlank() || authorId.isBlank()) return
     try {
-        val commentsRef = Firebase.database(DB_URL)
+        val commentsRef = Firebase.database(AppConfig.DB_URL)
             .reference("community_comments")
             .child(postId)
         val ref       = commentsRef.push()
@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
         ref.child("text").setValue(text)
         ref.child("timestamp").setValue(currentTimeMillis().toDouble()) // ← Double
 
-        val countRef = Firebase.database(DB_URL)
+        val countRef = Firebase.database(AppConfig.DB_URL)
             .reference("community_posts")
             .child(postId)
             .child("commentCount")
@@ -53,7 +53,7 @@ import kotlinx.coroutines.launch
     if (currentUserId.isBlank() || post.id.isBlank()) return
     scope.launch {
         try {
-            val db      = Firebase.database(DB_URL)
+            val db      = Firebase.database(AppConfig.DB_URL)
             val likeRef = db.reference("community_likes")
                 .child(post.id)
                 .child(currentUserId)
@@ -82,7 +82,7 @@ import kotlinx.coroutines.launch
  suspend fun editPost(postId: String, newDescription: String) {
     if (postId.isBlank()) return
     try {
-        Firebase.database(DB_URL)
+        Firebase.database(AppConfig.DB_URL)
             .reference("community_posts")
             .child(postId)
             .child("description")
@@ -97,7 +97,7 @@ import kotlinx.coroutines.launch
  suspend fun deletePost(postId: String) {
     if (postId.isBlank()) return
     try {
-        val db = Firebase.database(DB_URL)
+        val db = Firebase.database(AppConfig.DB_URL)
         // Delete the post
         db.reference("community_posts").child(postId).removeValue()
         // Delete associated likes

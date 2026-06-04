@@ -196,3 +196,18 @@ private fun resizeIosImage(image: UIImage, maxSize: Double): UIImage {
 
     return scaledImage ?: image
 }
+
+
+object IosCrashBridge {
+    var onLogMessage: ((String) -> Unit)? = null
+    var onRecordException: ((String) -> Unit)? = null
+}
+
+actual fun logCrashMessage(message: String) {
+    IosCrashBridge.onLogMessage?.invoke(message)
+}
+
+actual fun logCrashException(throwable: Throwable) {
+    IosCrashBridge.onRecordException?.invoke(throwable.message ?: throwable.toString())
+}
+

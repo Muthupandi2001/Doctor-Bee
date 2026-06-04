@@ -14,7 +14,6 @@ fun main() {
 
     val webOptions = FirebaseOptions(
         applicationId = "1:444402775117:web:82608e86b7a6afde1b1804",
-//        apiKey        = "AIzaSyBzHwoHb9KhxPDvdPfkOtI8BbjFprgYgXk",
         apiKey        = "AIzaSyAoWD1PhhfBmZSPXvizEGndJtcRf1dtu_A",
         projectId     = "doctor-bee-2d622",
         storageBucket = "doctor-bee-2d622.firebasestorage.app",
@@ -23,7 +22,7 @@ fun main() {
 
     Firebase.initialize(options = webOptions)
 
-    // ✅ Parse deep link params from browser URL
+    // Parse deep link params from browser URL
     val urlParams  = URLSearchParams(window.location.search)
     val screen     = urlParams.get("screen")
     val referrerId = urlParams.get("referrerId")
@@ -37,8 +36,6 @@ fun main() {
     ComposeViewport(document.body!!) {
         App(
             deepLinkParams = deepLinkParams,
-            // ✅ Web has no FCM token saving — no-op stub
-            // FCM for web requires a separate Service Worker setup
             onUserLoggedIn = { uid ->
                 console.log("Web login: uid=$uid (FCM web push not configured)")
             }
@@ -64,7 +61,7 @@ fun shareReferralLinkWeb(userId: String) {
     }
 }
 
-// ✅ KMP-safe URLSearchParams wrapper
+// KMP-safe URLSearchParams wrapper
 external class URLSearchParams(init: String) {
     fun get(name: String): String?
 }

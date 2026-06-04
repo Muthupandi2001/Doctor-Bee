@@ -2,7 +2,6 @@ package com.example.drbee.MainScreen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,16 +16,17 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import com.example.drbee.ChatActivity.ChatActivity
 import com.example.drbee.CommunityScreen.CommunityScreen
+import com.example.drbee.Helper.NotificationEvent
+import com.example.drbee.Helper.NotificationRouter
 import com.example.drbee.ProfileScreen.ProfileScreen
-import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 
 sealed class BottomTab(val route: String) {
-    data object Home    : BottomTab("home")
-    data object Search  : BottomTab("search")
-    data object Chat    : BottomTab("chat")
-    data object Profile : BottomTab("profile")
+    data object Home      : BottomTab("home")
+    data object Search    : BottomTab("search")
     data object Community : BottomTab("community")
+    data object Chat      : BottomTab("chat")
+    data object Profile   : BottomTab("profile")
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -35,17 +35,34 @@ fun MainScreen(
     navController   : NavController,
     onLogoutSuccess : () -> Unit
 ) {
-    var selectedTab      by remember { mutableStateOf<BottomTab>(BottomTab.Community) }
-    var isChatDetailOpen by remember { mutableStateOf(false) }
+    var selectedTab         by remember { mutableStateOf<BottomTab>(BottomTab.Community) }
+    var isChatDetailOpen    by remember { mutableStateOf(false) }
+    var targetOtherUserId   by remember { mutableStateOf<String?>(null) }
+    var notificationVersion by remember { mutableIntStateOf(0) }
 
-    val navigationEventState = rememberNavigationEventState(
-        currentInfo = NavigationEventInfo.None
-    )
+    val routerVersion = NotificationRouter.routerVersion
+
+    LaunchedEffect(routerVersion) {
+        if (routerVersion == 0) return@LaunchedEffect
+        when (val event = NotificationRouter.consume()) {
+            is NotificationEvent.OpenChat -> {
+                targetOtherUserId   = event.otherUserId
+                notificationVersion += 1
+                selectedTab         = BottomTab.Chat
+            }
+            is NotificationEvent.OpenCommunity -> {
+                selectedTab = BottomTab.Community
+            }
+            null -> { /* already consumed — safe to ignore */ }
+        }
+    }
+
+    val backState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
     NavigationBackHandler(
-        state           = navigationEventState,
+        state           = backState,
         isBackEnabled   = true,
         onBackCancelled = {},
-        onBackCompleted = { }
+        onBackCompleted = {}
     )
 
     Scaffold(
@@ -53,7 +70,7 @@ fun MainScreen(
             .fillMaxSize()
             .background(WonderBeeTheme.extendedDesign.surfaceBackground),
         containerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-        bottomBar = {
+        bottomBar      = {
             if (!isChatDetailOpen) {
                 BottomBar(selected = selectedTab, onSelect = { selectedTab = it })
             }
@@ -64,20 +81,72 @@ fun MainScreen(
             else Modifier.padding(padding)
         ) {
             when (selectedTab) {
-                BottomTab.Home    -> HomeScreen()
-                BottomTab.Search  -> SearchScreen()
-                BottomTab.Community  -> CommunityScreen()
-                BottomTab.Profile -> ProfileScreen(
+                BottomTab.Home      -> HomeScreen()
+                BottomTab.Search    -> SearchScreen()
+                BottomTab.Community -> CommunityScreen()
+                BottomTab.Profile   -> ProfileScreen(
                     navController   = navController,
                     onLogoutSuccess = onLogoutSuccess
                 )
-                BottomTab.Chat -> ChatActivity(
-                    onChatDetailStateChanged = { isOpen -> isChatDetailOpen = isOpen }
-                    // ✅ no image lambdas
+                BottomTab.Chat      -> ChatActivity(
+                    targetOtherUserId        = targetOtherUserId,
+                    notificationVersion      = notificationVersion,
+                    onChatDetailStateChanged = { isOpen ->
+                        isChatDetailOpen = isOpen
+                    }
                 )
             }
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun BottomBar(selected: BottomTab, onSelect: (BottomTab) -> Unit) {
+    val activeGradient  = WonderBeeTheme.extendedDesign.primaryGradientBrush
+    val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
+
+    NavigationBar {
+        BottomBarItem(BottomTab.Home,      selected, "Home",    Icons.Default.Home,        activeGradient, unselectedColor, onSelect)
+        BottomBarItem(BottomTab.Search,    selected, "Search",  Icons.Default.Search,      activeGradient, unselectedColor, onSelect)
+        BottomBarItem(BottomTab.Community, selected, "Today",   Icons.Default.Celebration, activeGradient, unselectedColor, onSelect)
+        BottomBarItem(BottomTab.Chat,      selected, "Chat",    Icons.Default.Email,       activeGradient, unselectedColor, onSelect)
+        BottomBarItem(BottomTab.Profile,   selected, "Profile", Icons.Default.Person,      activeGradient, unselectedColor, onSelect)
+    }
+}
+
+@Composable
+private fun RowScope.BottomBarItem(
+    tab             : BottomTab,
+    selected        : BottomTab,
+    label           : String,
+    icon            : androidx.compose.ui.graphics.vector.ImageVector,
+    activeGradient  : Brush,
+    unselectedColor : Color,
+    onSelect        : (BottomTab) -> Unit
+) {
+    val isActive = selected == tab
+    NavigationBarItem(
+        selected = isActive,
+        onClick  = { onSelect(tab) },
+        icon     = {
+            Icon(
+                imageVector        = icon,
+                contentDescription = label,
+                modifier           = if (isActive) Modifier.applyGradientTint(activeGradient) else Modifier,
+                tint               = if (isActive) Color.White else unselectedColor
+            )
+        },
+        label    = {
+            Text(
+                text     = label,
+                modifier = if (isActive) Modifier.applyGradientTint(activeGradient) else Modifier,
+                color    = if (isActive) Color.White else unselectedColor
+            )
+        },
+        colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+    )
 }
 
 fun Modifier.applyGradientTint(brush: Brush): Modifier = this
@@ -86,166 +155,3 @@ fun Modifier.applyGradientTint(brush: Brush): Modifier = this
         drawContent()
         drawRect(brush = brush, blendMode = BlendMode.SrcIn)
     }
-
-@Composable
-fun BottomBar(
-    selected : BottomTab,
-    onSelect : (BottomTab) -> Unit
-) {
-    val activeGradient  = WonderBeeTheme.extendedDesign.primaryGradientBrush
-    val unselectedColor = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
-
-    NavigationBar {
-
-        NavigationBarItem(
-            selected = selected == BottomTab.Home,
-            onClick  = { onSelect(BottomTab.Home) },
-            icon = {
-                Icon(
-                    imageVector        = Icons.Default.Home,
-                    contentDescription = null,
-                    modifier           = if (selected == BottomTab.Home)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint               = if (selected == BottomTab.Home) Color.White else unselectedColor
-                )
-            },
-            label = {
-                Text(
-                    text     = "Home",
-                    modifier = if (selected == BottomTab.Home)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color    = if (selected == BottomTab.Home) Color.White else unselectedColor
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-        )
-
-        NavigationBarItem(
-            selected = selected == BottomTab.Search,
-            onClick  = { onSelect(BottomTab.Search) },
-            icon = {
-                Icon(
-                    imageVector        = Icons.Default.Search,
-                    contentDescription = null,
-                    modifier           = if (selected == BottomTab.Search)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint               = if (selected == BottomTab.Search) Color.White else unselectedColor
-                )
-            },
-            label = {
-                Text(
-                    text     = "Search",
-                    modifier = if (selected == BottomTab.Search)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color    = if (selected == BottomTab.Search) Color.White else unselectedColor
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-        )
-
-
-        NavigationBarItem(
-            selected = selected == BottomTab.Community,
-            onClick  = { onSelect(BottomTab.Community) },
-            icon = {
-                Icon(
-                    imageVector        = Icons.Default.Celebration,
-                    contentDescription = null,
-                    modifier           = if (selected == BottomTab.Community)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint               = if (selected == BottomTab.Community) Color.White else unselectedColor
-                )
-            },
-            label = {
-                Text(
-                    text     = "Today",
-                    modifier = if (selected == BottomTab.Community)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color    = if (selected == BottomTab.Community) Color.White else unselectedColor
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-        )
-
-//        Box(
-//            modifier         = Modifier.padding(6.dp).size(60.dp),
-//            contentAlignment = Alignment.Center
-//        )
-//        {
-//            val fabBrush = if (ThemePreferencesManager.isCustomColorEnabled) {
-//                Brush.horizontalGradient(listOf(
-//                    ThemePreferencesManager.customColorStart,
-//                    ThemePreferencesManager.customColorEnd
-//                ))
-//            } else {
-//                Brush.horizontalGradient(listOf(
-//                    WonderBeeTheme.materialScheme.primary,
-//                    WonderBeeTheme.materialScheme.secondary
-//                ))
-//            }
-//
-//            FloatingActionButton(
-//                onClick        = { onSelect(BottomTab.Camera) },
-//                modifier       = Modifier
-//                    .size(52.dp)
-//                    .background(brush = fabBrush, shape = CircleShape),
-//                containerColor = Color.Transparent,
-//                contentColor   = WonderBeeTheme.materialScheme.onPrimary,
-//                elevation      = FloatingActionButtonDefaults.elevation(0.dp),
-//                shape          = CircleShape
-//            ) {
-//                Icon(
-//                    imageVector        = Icons.Default.Add,
-//                    contentDescription = "Camera",
-//                    modifier           = Modifier.size(28.dp)
-//                )
-//            }
-//        }
-
-        NavigationBarItem(
-            selected = selected == BottomTab.Chat,
-            onClick  = { onSelect(BottomTab.Chat) },
-            icon = {
-                Icon(
-                    imageVector        = Icons.Default.Email,
-                    contentDescription = null,
-                    modifier           = if (selected == BottomTab.Chat)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint               = if (selected == BottomTab.Chat) Color.White else unselectedColor
-                )
-            },
-            label = {
-                Text(
-                    text     = "Chat",
-                    modifier = if (selected == BottomTab.Chat)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color    = if (selected == BottomTab.Chat) Color.White else unselectedColor
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-        )
-
-        NavigationBarItem(
-            selected = selected == BottomTab.Profile,
-            onClick  = { onSelect(BottomTab.Profile) },
-            icon = {
-                Icon(
-                    imageVector        = Icons.Default.Person,
-                    contentDescription = null,
-                    modifier           = if (selected == BottomTab.Profile)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    tint               = if (selected == BottomTab.Profile) Color.White else unselectedColor
-                )
-            },
-            label = {
-                Text(
-                    text     = "Profile",
-                    modifier = if (selected == BottomTab.Profile)
-                        Modifier.applyGradientTint(activeGradient) else Modifier,
-                    color    = if (selected == BottomTab.Profile) Color.White else unselectedColor
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-        )
-    }
-}

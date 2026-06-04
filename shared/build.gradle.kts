@@ -6,6 +6,9 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlin.serialization)
+
+//    id("com.google.firebase.crashlytics")
+
 }
 
 kotlin {
@@ -45,11 +48,16 @@ kotlin {
 
             implementation("com.google.firebase:firebase-messaging:25.0.2")
             implementation("com.google.auth:google-auth-library-oauth2-http:1.47.0")
+            implementation("com.google.firebase:firebase-crashlytics")
+            implementation("com.google.firebase:firebase-analytics")
         }
 
         commonMain.dependencies {
             implementation("dev.gitlive:firebase-auth:2.4.0")
             implementation("dev.gitlive:firebase-database:2.4.0")
+
+//            implementation("com.google.firebase:firebase-crashlytics")
+//            implementation("com.google.firebase:firebase-analytics")
 
 //            implementation("com.google.firebase:firebase-messaging:24.0.0")
 //

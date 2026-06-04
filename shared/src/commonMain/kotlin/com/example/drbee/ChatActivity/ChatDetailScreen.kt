@@ -24,130 +24,73 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
 import com.example.drbee.Helper.SessionManager
 import com.example.drbee.NotificationService
 import com.example.drbee.ProfileScreen.ThemePreferencesManager
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 import com.example.drbee.decodeBase64ToImageBitmap
+import com.example.drbee.logCrashException
+import com.example.drbee.logCrashMessage
 import com.example.drbee.rememberImagePickerLauncher
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.database
 import io.github.aakira.napier.Napier
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val DB_URL = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
+
+/**
+ * Chat detail screen.
+ * Takes the already-resolved [FirebaseChatModel] — no extra Firebase fetch needed.
+ * ChatActivity already has the model from its user list, so we reuse it directly.
+ */
 @Composable
 fun ChatDetailScreen(
-    chat   : FirebaseChatModel,
+    chat   : FirebaseChatModel,   // the other user — already loaded by ChatActivity
     onBack : () -> Unit
 ) {
-    // ── State ────────────────────────────────────────────────────────────────
+    val currentUserId = remember {
+        Firebase.auth.currentUser?.uid?.takeIf { it.isNotBlank() }
+            ?: SessionManager.savedUserId.takeIf { it.isNotBlank() }
+            ?: ""
+    }
+
     var messageText   by remember { mutableStateOf("") }
     var dbMessages    by remember { mutableStateOf<List<FirebaseMessageModel>>(emptyList()) }
-    var currentUserId by remember { mutableStateOf("") }
     var profileBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
 
     val scope               = rememberCoroutineScope()
     val listState           = rememberLazyListState()
     val notificationService = remember { NotificationService() }
-    val databaseUrl         = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
 
-    // ── Stable room ID ───────────────────────────────────────────────────────
+    // Deterministic, order-independent room ID
     val roomId = remember(currentUserId, chat.id) {
         val a = currentUserId.lowercase()
         val b = chat.id.lowercase()
         if (a < b) "${a}_${b}" else "${b}_${a}"
     }
 
-    // ── sendMessage — defined BEFORE imagePicker so the lambda can reference it ──
-    fun sendMessage(text: String = "", imageBase64: String = "") {
-        if (currentUserId.isEmpty()) return
-        scope.launch {
-            try {
-                val ref = Firebase.database(databaseUrl)
-                    .reference("chats_messages")
-                    .child(roomId)
-                    .push()
-
-                ref.setValue(
-                    FirebaseMessageModel(
-                        id          = ref.key ?: "",
-                        text        = text,
-                        imageBase64 = imageBase64.ifEmpty { null },
-                        senderId    = currentUserId
-                    )
-                )
-
-                val senderName = runCatching {
-                    Firebase.database(databaseUrl)
-                        .reference("users")
-                        .child(currentUserId)
-                        .child("name")
-                        .valueEvents
-                        .first()
-                        .value as? String
-                }.getOrNull() ?: chat.name
-
-                notificationService.sendPushNotification(
-                    recipientUserId = chat.id,
-                    senderName      = senderName,
-                    messageText     = text.ifEmpty { "📷 Image" },
-                    senderId        = currentUserId,
-                    roomId          = roomId
-                )
-            } catch (e: Exception) {
-                Napier.e("Send failed: ${e.message}")
-            }
-        }
-    }
-
-    // ── Image picker — uses expect/actual, no MainActivity needed ────────────
-    val imagePicker = rememberImagePickerLauncher { base64 ->
-        if (base64.isNotEmpty()) sendMessage(imageBase64 = base64)
-    }
-
-    // ── Back handler ─────────────────────────────────────────────────────────
-    val backState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
-    NavigationBackHandler(
-        state           = backState,
-        isBackEnabled   = true,
-        onBackCancelled = {},
-        onBackCompleted = { onBack() }
-    )
-
-    // ── Decode header profile image ──────────────────────────────────────────
+    // ── Profile image ─────────────────────────────────────────────────────────
     LaunchedEffect(chat.profileImage) {
         profileBitmap = chat.profileImage
             ?.takeIf { it.isNotEmpty() }
-            ?.let { decodeBase64ToImageBitmap(it) }
+            ?.let { withContext(Dispatchers.Default) { decodeBase64ToImageBitmap(it) } }
     }
 
-    // ── Resolve current user ─────────────────────────────────────────────────
-    LaunchedEffect(Unit) {
-        currentUserId = when {
-            Firebase.auth.currentUser?.uid?.isNotBlank() == true ->
-                Firebase.auth.currentUser?.uid ?: ""
-            SessionManager.savedUserId.isNotBlank() ->
-                SessionManager.savedUserId
-            else -> ""
-        }
-    }
-
-    // ── Auto-scroll on new message ───────────────────────────────────────────
+    // ── Auto-scroll on new message ────────────────────────────────────────────
     LaunchedEffect(dbMessages.size) {
         if (dbMessages.isNotEmpty()) listState.animateScrollToItem(dbMessages.size - 1)
     }
 
-    // ── Real-time message listener ───────────────────────────────────────────
+    // ── Real-time message stream ──────────────────────────────────────────────
     LaunchedEffect(roomId) {
         try {
-            Firebase.database(databaseUrl)
+            Firebase.database(DB_URL)
                 .reference("chats_messages")
                 .child(roomId)
                 .valueEvents
@@ -164,13 +107,61 @@ fun ChatDetailScreen(
                         }
                     }
                 }
-                .collect { fetched -> dbMessages = fetched }
+                .collect { dbMessages = it }
         } catch (e: Exception) {
             Napier.e("Stream error: ${e.message}")
         }
     }
 
-    // ── UI ───────────────────────────────────────────────────────────────────
+    // ── Send message ──────────────────────────────────────────────────────────
+    fun sendMessage(text: String = "", imageBase64: String = "") {
+        if (currentUserId.isEmpty()) return
+        scope.launch {
+            try {
+                val ref = Firebase.database(DB_URL)
+                    .reference("chats_messages")
+                    .child(roomId)
+                    .push()
+
+                ref.setValue(
+                    FirebaseMessageModel(
+                        id          = ref.key ?: "",
+                        text        = text,
+                        imageBase64 = imageBase64.ifEmpty { null },
+                        senderId    = currentUserId
+                    )
+                )
+
+                val senderName = runCatching {
+                    Firebase.database(DB_URL)
+                        .reference("users")
+                        .child(currentUserId)
+                        .child("name")
+                        .valueEvents
+                        .first()
+                        .value as? String
+                }.getOrNull() ?: chat.name
+
+                notificationService.sendPushNotification(
+                    recipientUserId = chat.id,
+                    senderName      = senderName,
+                    messageText     = text.ifEmpty { "📷 Image" },
+                    senderId        = currentUserId,
+                    roomId          = roomId,
+                    isChat          = true
+                )
+            } catch (e: Exception) {
+                Napier.e("Send failed: ${e.message}")
+            }
+        }
+    }
+
+    // ── Image picker ──────────────────────────────────────────────────────────
+    val imagePicker = rememberImagePickerLauncher { base64 ->
+        if (base64.isNotEmpty()) sendMessage(imageBase64 = base64)
+    }
+
+    // ── UI ────────────────────────────────────────────────────────────────────
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -180,60 +171,12 @@ fun ChatDetailScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            // ── Header ───────────────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(WonderBeeTheme.extendedDesign.primaryGradientBrush)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector        = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint               = WonderBeeTheme.materialScheme.onPrimary,
-                    modifier           = Modifier.clickable { onBack() }
-                )
-                Spacer(Modifier.width(12.dp))
+            ChatHeader(
+                chat          = chat,
+                profileBitmap = profileBitmap,
+                onBack        = onBack
+            )
 
-                Box(
-                    modifier         = Modifier.size(45.dp).clip(CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (profileBitmap != null) {
-                        Image(
-                            bitmap             = profileBitmap!!,
-                            contentDescription = null,
-                            modifier           = Modifier.size(45.dp).clip(CircleShape),
-                            contentScale       = ContentScale.Crop
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(45.dp)
-                                .background(Color.White.copy(alpha = 0.3f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text       = chat.name.take(1).uppercase(),
-                                color      = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize   = 18.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text       = chat.name,
-                    color      = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize   = 18.sp
-                )
-            }
-
-            // ── Message list ─────────────────────────────────────────────────
             LazyColumn(
                 state               = listState,
                 modifier            = Modifier
@@ -247,73 +190,159 @@ fun ChatDetailScreen(
                 }
             }
 
-            // ── Input bar ────────────────────────────────────────────────────
-            Row(
-                modifier          = Modifier
-                    .fillMaxWidth()
-                    .background(WonderBeeTheme.extendedDesign.surfaceBackground)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { imagePicker.launch() }) {
-                    Icon(
-                        imageVector        = Icons.Default.AttachFile,
-                        contentDescription = "Attach image",
-                        tint               = WonderBeeTheme.materialScheme.primary
-                    )
-                }
-
-                Spacer(Modifier.width(4.dp))
-
-                OutlinedTextField(
-                    value         = messageText,
-                    onValueChange = { messageText = it },
-                    modifier      = Modifier.weight(1f),
-                    placeholder   = {
-                        Text(
-                            text  = "Type message...",
-                            color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.5f)
-                        )
-                    },
-                    shape     = RoundedCornerShape(30.dp),
-                    textStyle = LocalTextStyle.current.copy(
-                        color = WonderBeeTheme.materialScheme.onBackground
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor   = WonderBeeTheme.extendedDesign.surfaceBackground,
-                        unfocusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
-                        focusedBorderColor      = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
-                        unfocusedBorderColor    = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
-                        cursorColor             = WonderBeeTheme.materialScheme.primary
-                    )
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                FloatingActionButton(
-                    onClick = {
-                        val text = messageText.trim()
-                        if (text.isNotBlank()) {
+            ChatInputBar(
+                messageText  = messageText,
+                onTextChange = { messageText = it },
+                onAttach     = { imagePicker.launch() },
+                onSend       = {
+                    val text = messageText.trim()
+                    if (text.isNotBlank()) {
+                        logCrashMessage("User initiated message delivery on ChatDetailScreen")
+                        try {
                             messageText = ""
                             sendMessage(text = text)
+                        } catch (t: Throwable) {
+                            logCrashException(t)
                         }
-                    },
-                    modifier = Modifier.background(
-                        brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
-                        shape = FloatingActionButtonDefaults.shape
-                    ),
-                    containerColor = Color.Transparent,
-                    elevation      = FloatingActionButtonDefaults.elevation(0.dp)
-                ) {
-                    Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                    }
                 }
-            }
+            )
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MESSAGE BUBBLE
+// Header
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ChatHeader(
+    chat          : FirebaseChatModel,
+    profileBitmap : ImageBitmap?,
+    onBack        : () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(WonderBeeTheme.extendedDesign.primaryGradientBrush)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector        = Icons.Default.ArrowBack,
+            contentDescription = "Back",
+            tint               = WonderBeeTheme.materialScheme.onPrimary,
+            modifier           = Modifier.clickable { onBack() }
+        )
+        Spacer(Modifier.width(12.dp))
+
+        Box(
+            modifier         = Modifier.size(45.dp).clip(CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (profileBitmap != null) {
+                Image(
+                    bitmap             = profileBitmap,
+                    contentDescription = null,
+                    modifier           = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale       = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier         = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = 0.3f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text       = chat.name.take(1).uppercase(),
+                        color      = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize   = 18.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text       = chat.name,
+            color      = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize   = 18.sp
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Input bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ChatInputBar(
+    messageText  : String,
+    onTextChange : (String) -> Unit,
+    onAttach     : () -> Unit,
+    onSend       : () -> Unit
+) {
+    Row(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .background(WonderBeeTheme.extendedDesign.surfaceBackground)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onAttach) {
+            Icon(
+                imageVector        = Icons.Default.AttachFile,
+                contentDescription = "Attach image",
+                tint               = WonderBeeTheme.materialScheme.primary
+            )
+        }
+
+        Spacer(Modifier.width(4.dp))
+
+        OutlinedTextField(
+            value         = messageText,
+            onValueChange = onTextChange,
+            modifier      = Modifier.weight(1f),
+            placeholder   = {
+                Text(
+                    text  = "Type message...",
+                    color = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.5f)
+                )
+            },
+            shape     = RoundedCornerShape(30.dp),
+            textStyle = LocalTextStyle.current.copy(
+                color = WonderBeeTheme.materialScheme.onBackground
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor   = WonderBeeTheme.extendedDesign.surfaceBackground,
+                unfocusedContainerColor = WonderBeeTheme.extendedDesign.surfaceBackground,
+                focusedBorderColor      = WonderBeeTheme.extendedDesign.inputFocusedBorderColor,
+                unfocusedBorderColor    = WonderBeeTheme.extendedDesign.inputUnfocusedBorderColor,
+                cursorColor             = WonderBeeTheme.materialScheme.primary
+            )
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        FloatingActionButton(
+            onClick        = onSend,
+            modifier       = Modifier.background(
+                brush = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                shape = FloatingActionButtonDefaults.shape
+            ),
+            containerColor = Color.Transparent,
+            elevation      = FloatingActionButtonDefaults.elevation(0.dp)
+        ) {
+            Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Message bubble
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -323,7 +352,7 @@ fun ChatMessageBubble(msg: FirebaseMessageModel) {
     LaunchedEffect(msg.imageBase64) {
         imageBitmap = msg.imageBase64
             ?.takeIf { it.isNotEmpty() }
-            ?.let { decodeBase64ToImageBitmap(it) }
+            ?.let { withContext(Dispatchers.Default) { decodeBase64ToImageBitmap(it) } }
     }
 
     val bubbleBg = if (msg.isMe) {

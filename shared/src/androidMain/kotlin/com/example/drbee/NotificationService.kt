@@ -118,6 +118,8 @@ actual class NotificationService actual constructor() {
                     val messageText = snapshot.child("messageText").value?.toString()
                     val senderId    = snapshot.child("senderId").value?.toString()
                     val roomId      = snapshot.child("roomId").value?.toString()
+                    val isChat      = snapshot.child("isChat").value?.toString()
+                        ?.toBooleanStrictOrNull() ?: true
 
                     Log.d(TAG, ">>> senderName=$senderName messageText=$messageText")
 
@@ -136,7 +138,8 @@ actual class NotificationService actual constructor() {
                                 senderName      = senderName,
                                 messageText     = messageText,
                                 senderId        = senderId,
-                                roomId          = roomId
+                                roomId          = roomId,
+                                isChat          = isChat
                             )
                             withContext(Dispatchers.Main) {
                                 nodeRef.removeValue()
@@ -169,7 +172,8 @@ actual class NotificationService actual constructor() {
         senderName      : String,
         messageText     : String,
         senderId        : String,
-        roomId          : String
+        roomId          : String,
+        isChat          : Boolean
     ) = withContext(Dispatchers.IO) {
         Log.d(TAG, ">>> sendPushNotification recipient=$recipientUserId")
         try {
@@ -210,7 +214,11 @@ actual class NotificationService actual constructor() {
                     put("data", JSONObject().apply {
                         put("senderId", senderId)
                         put("roomId", roomId)
-                        put("type", "chat_message")
+                      if (isChat){
+                          put("type", "chat_message")
+                      }else{
+                          put("type", "community")
+                      }
                     })
                     put("android", JSONObject().apply {
                         put("priority", "HIGH")

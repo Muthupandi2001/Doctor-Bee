@@ -19,3 +19,6 @@ expect fun rememberCameraLauncher(onResult: (base64: String) -> Unit): ImagePick
 expect fun shareReferralLink(userId: String)
 
 expect fun currentTimeMillis(): Long
+
+expect fun logCrashMessage(message: String)
+expect fun logCrashException(throwable: Throwable)

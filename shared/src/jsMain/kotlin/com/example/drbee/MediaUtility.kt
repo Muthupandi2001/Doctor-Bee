@@ -15,6 +15,7 @@ import org.jetbrains.skia.Bitmap
 import kotlin.coroutines.resume
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.ImageBitmap
+import com.example.drbee.Helper.AppConfig
 import kotlinx.browser.document
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.events.Event
@@ -130,8 +131,9 @@ actual fun rememberImagePickerLauncher(onResult: (base64: String) -> Unit): Imag
 }
 
 
+
 actual fun shareReferralLink(userId: String) {
-    val url  = "https://netlify.app"
+    val url  = "${AppConfig.WEB_BASE_URL}/?screen=referral&referrerId=$userId"
     val text = "Hey! Join DrBee: $url"
 
     val shareData = js("({})").unsafeCast<dynamic>()
@@ -195,4 +197,16 @@ private fun createFileInput(
         }
     }
     return input
+}
+
+
+actual fun logCrashMessage(message: String) {
+    // Call console directly without using .window.
+    console.log("[KMP Log] $message")
+}
+
+actual fun logCrashException(throwable: Throwable) {
+    // Call console directly and print the crash trace details
+    console.error("[KMP Error] ${throwable.message}")
+    console.error(throwable.stackTraceToString())
 }

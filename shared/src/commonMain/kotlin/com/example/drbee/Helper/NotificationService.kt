@@ -8,6 +8,7 @@ expect class NotificationService() {
         senderName: String,
         messageText: String,
         senderId: String,
-        roomId: String
+        roomId: String,
+        isChat: Boolean
     )
 }

@@ -3,12 +3,16 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
+import com.example.drbee.NotificationParams
 import com.example.drbee.currentTimeMillis
 import drbee.shared.generated.resources.Res
 import drbee.shared.generated.resources.font_bold
@@ -19,9 +23,12 @@ import io.github.aakira.napier.DebugAntilog
 import io.github.aakira.napier.Napier
 
 import io.github.alexzhirkevich.compottie.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 
 import org.jetbrains.compose.resources.Font
+import kotlin.concurrent.Volatile
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -168,3 +175,26 @@ fun formatTimestamp(ts: Long): String {
         else              -> "${diffS / (86400 * 7)}w ago"
     }
 }
+object NotificationRouter {
+    var routerVersion by mutableIntStateOf(0)
+        private set
+
+    private var pendingEvent: NotificationEvent? = null
+
+    fun post(event: NotificationEvent) {
+        pendingEvent = event
+        routerVersion++
+    }
+
+    fun consume(): NotificationEvent? {
+        val e = pendingEvent
+        pendingEvent = null
+        return e
+    }
+}
+/** All notification-driven navigation targets. */
+sealed class NotificationEvent {
+    data class OpenChat(val otherUserId: String, val roomId: String) : NotificationEvent()
+    object OpenCommunity : NotificationEvent()
+}
+

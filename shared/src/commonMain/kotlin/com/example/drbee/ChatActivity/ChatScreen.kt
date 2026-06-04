@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,210 +31,111 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ENTRY POINT
-// ─────────────────────────────────────────────────────────────────────────────
-
 @Composable
 fun ChatActivity(
-    onChatDetailStateChanged : (Boolean) -> Unit = {},
+    targetOtherUserId        : String?  = null,
+    notificationVersion      : Int      = 0,
+    onChatDetailStateChanged : (Boolean) -> Unit = {}
 ) {
-    var liveChatList by remember { mutableStateOf<List<FirebaseChatModel>>(emptyList()) }
+    val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
+    val currentUid  = Firebase.auth.currentUser?.uid
+        ?: SessionManager.savedUserId.takeIf { it.isNotBlank() }
+        ?: ""
+
+    var chatList     by remember { mutableStateOf<List<FirebaseChatModel>>(emptyList()) }
     var isLoading    by remember { mutableStateOf(true) }
     var selectedChat by remember { mutableStateOf<FirebaseChatModel?>(null) }
 
-    val auth        = remember { Firebase.auth }
-    val currentUid  = auth.currentUser?.uid ?: ""
-    val databaseUrl = "https://doctor-bee-2d622-default-rtdb.firebaseio.com/"
-
-    LaunchedEffect(selectedChat) {
-        onChatDetailStateChanged(selectedChat != null)
-    }
-
+    // ── Load user list (real-time) ────────────────────────────────────────────
     LaunchedEffect(currentUid) {
-        val resolvedUid = when {
-            currentUid.isNotBlank()   -> currentUid
-            SessionManager.isLoggedIn -> SessionManager.savedUserId
-            else                      -> ""
-        }
+        if (currentUid.isBlank()) { isLoading = false; return@LaunchedEffect }
         try {
             Firebase.database(databaseUrl)
                 .reference("users")
                 .valueEvents
                 .mapNotNull { snapshot ->
                     snapshot.children.mapNotNull { child ->
-                        try {
-                            if (child.key == resolvedUid) return@mapNotNull null
-                            child.value<FirebaseChatModel>().copy(id = child.key ?: "")
-                        } catch (e: Exception) {
-                            Napier.e("Serialization error: ${e.message}")
-                            null
-                        }
+                        if (child.key == currentUid) return@mapNotNull null
+                        try { child.value<FirebaseChatModel>().copy(id = child.key ?: "") }
+                        catch (e: Exception) { Napier.e("Serialization: ${e.message}"); null }
                     }
                 }
                 .collect { list ->
-                    liveChatList = list
-                    isLoading    = false
+                    chatList  = list
+                    isLoading = false
                 }
         } catch (e: Exception) {
-            Napier.e("Database error: ${e.message}")
+            Napier.e("DB error: ${e.message}")
             isLoading = false
         }
     }
 
+    // ── Auto-open from notification ───────────────────────────────────────────
+    // Three keys so every case is covered:
+    //
+    // chatList.size  → re-fires once users load (killed-state: list arrives after
+    //                  the event, so we need a second chance to match)
+    //
+    // notificationVersion → re-fires when the same user is tapped again while
+    //                        the app is live (version bumps even if UID unchanged)
+    //
+    // targetOtherUserId   → re-fires when a different user's notification arrives
+    LaunchedEffect(targetOtherUserId, notificationVersion, chatList.size) {
+        if (targetOtherUserId.isNullOrBlank()) return@LaunchedEffect
+        if (chatList.isEmpty()) return@LaunchedEffect
+        val match = chatList.firstOrNull { it.id == targetOtherUserId }
+        if (match != null) {
+            selectedChat = match
+        } else {
+            Napier.w("ChatActivity: user not found in list — id=$targetOtherUserId")
+        }
+    }
+
+    // ── Report open/closed state to MainScreen ────────────────────────────────
+    DisposableEffect(selectedChat) {
+        onChatDetailStateChanged(selectedChat != null)
+        onDispose { onChatDetailStateChanged(false) }
+    }
+
+    // ── UI ────────────────────────────────────────────────────────────────────
     when {
-        isLoading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = WonderBeeTheme.materialScheme.primary)
-            }
+        isLoading            -> Box(Modifier.fillMaxSize(), Alignment.Center) {
+            CircularProgressIndicator(color = WonderBeeTheme.materialScheme.primary)
         }
-        selectedChat == null -> {
-            ChatListScreen(
-                chatList               = liveChatList,
-                onChatClick            = { selectedChat = it }
-            )
-        }
-        else -> {
-            ChatDetailScreen(
-                chat                   = selectedChat!!,
-                onBack                 = { selectedChat = null }
-            )
-        }
+        selectedChat != null -> ChatDetailScreen(
+            chat   = selectedChat!!,
+            onBack = { selectedChat = null }
+        )
+        else                 -> ChatListScreen(
+            chatList    = chatList,
+            onChatClick = { selectedChat = it }
+        )
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHAT LIST SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 fun ChatListScreen(
-    chatList             : List<FirebaseChatModel>,
-    onChatClick          : (FirebaseChatModel) -> Unit
+    chatList    : List<FirebaseChatModel>,
+    onChatClick : (FirebaseChatModel) -> Unit
 ) {
-    val auth          = remember { Firebase.auth }
-    val currentUid    = auth.currentUser?.uid ?: ""
-
-    val resolvedUid = remember(currentUid) {
-        when {
-            currentUid.isNotBlank()   -> currentUid
-            SessionManager.isLoggedIn -> SessionManager.savedUserId
-            else                      -> ""
-        }
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(WonderBeeTheme.extendedDesign.surfaceBackground)
     ) {
         Text(
-            text     = "Chats",
-            fontSize = 34.sp,
+            text       = "Chats",
+            fontSize   = 34.sp,
             fontWeight = FontWeight.Bold,
-            color    = WonderBeeTheme.materialScheme.onBackground,
-            modifier = Modifier.padding(start = 20.dp, top = 50.dp, bottom = 16.dp)
+            color      = WonderBeeTheme.materialScheme.onBackground,
+            modifier   = Modifier.padding(start = 20.dp, top = 50.dp, bottom = 16.dp)
         )
-
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(chatList) { firebaseChat ->
-
-                // ✅ Decode profile image per row independently
-                var rowBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-
-                LaunchedEffect(firebaseChat.profileImage) {
-                    val base64 = firebaseChat.profileImage.orEmpty()
-                    if (base64.isNotEmpty()) {
-                        rowBitmap = withContext(Dispatchers.Default) {
-                            decodeBase64ToImageBitmap(base64)
-                        }
-                    } else {
-                        rowBitmap = null
-                    }
-                }
-
-                val parsedColor = remember(firebaseChat.colorHex) {
-                    try {
-                        val hex = firebaseChat.colorHex.removePrefix("#")
-                        Color(hex.toLong(16) or 0xFF000000L)
-                    } catch (e: Exception) {
-                        Color(0xFF6C63FF)
-                    }
-                }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .clickable { onChatClick(firebaseChat) },
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                ) {
-                    Row(
-                        modifier          = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Avatar
-                        Box(modifier = Modifier.clip(CircleShape)) {
-                            if (rowBitmap != null) {
-                                Image(
-                                    bitmap             = rowBitmap!!,
-                                    contentDescription = null,
-                                    modifier           = Modifier
-                                        .size(60.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(60.dp)
-                                        .background(parsedColor, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text       = firebaseChat.name.take(1).uppercase(),
-                                        color      = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize   = 22.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text  = firebaseChat.name,
-                                style = TextStyle(
-                                    brush      = WonderBeeTheme.extendedDesign.primaryGradientBrush,
-                                    fontSize   = 16.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text  = firebaseChat.message.ifEmpty { "Say hi 👋" },
-                                style = TextStyle(
-                                    brush      = WonderBeeTheme.extendedDesign.primaryGradientBrush,
-                                    fontSize   = 13.sp,
-                                    fontWeight = FontWeight.Normal
-                                ),
-                                maxLines = 1
-                            )
-                        }
-
-                        if (firebaseChat.time.isNotEmpty()) {
-                            Text(
-                                text     = firebaseChat.time,
-                                fontSize = 11.sp,
-                                color    = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
-                            )
-                        }
-                    }
-                }
-
-                Divider(
+            items(chatList, key = { it.id }) { chat ->
+                ChatListRow(chat = chat, onChatClick = { onChatClick(chat) })
+                HorizontalDivider(
                     modifier  = Modifier.padding(horizontal = 16.dp),
                     thickness = 0.5.dp,
                     color     = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.08f)
@@ -245,8 +145,89 @@ fun ChatListScreen(
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILITY
-// ─────────────────────────────────────────────────────────────────────────────
+@Composable
+private fun ChatListRow(chat: FirebaseChatModel, onChatClick: () -> Unit) {
+    var rowBitmap by remember(chat.id) { mutableStateOf<ImageBitmap?>(null) }
 
-fun clock_timestamp(): Long = TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds
+    LaunchedEffect(chat.profileImage) {
+        rowBitmap = chat.profileImage?.takeIf { it.isNotEmpty() }
+            ?.let { withContext(Dispatchers.Default) { decodeBase64ToImageBitmap(it) } }
+    }
+
+    val parsedColor = remember(chat.colorHex) {
+        runCatching {
+            Color(chat.colorHex.removePrefix("#").toLong(16) or 0xFF000000L)
+        }.getOrDefault(Color(0xFF6C63FF))
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable { onChatClick() },
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Row(
+            modifier          = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier         = Modifier.size(60.dp).clip(CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (rowBitmap != null) {
+                    Image(
+                        bitmap             = rowBitmap!!,
+                        contentDescription = null,
+                        modifier           = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale       = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier         = Modifier
+                            .fillMaxSize()
+                            .background(parsedColor, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text       = chat.name.take(1).uppercase(),
+                            color      = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 22.sp
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    chat.name,
+                    style = TextStyle(
+                        brush      = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    chat.message.ifEmpty { "Say hi 👋" },
+                    style    = TextStyle(
+                        brush    = WonderBeeTheme.extendedDesign.primaryGradientBrush,
+                        fontSize = 13.sp
+                    ),
+                    maxLines = 1
+                )
+            }
+            if (chat.time.isNotEmpty()) {
+                Text(
+                    chat.time,
+                    fontSize = 11.sp,
+                    color    = WonderBeeTheme.materialScheme.onBackground.copy(alpha = 0.4f)
+                )
+            }
+        }
+    }
+}
+
+fun clock_timestamp(): Long =
+    TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds

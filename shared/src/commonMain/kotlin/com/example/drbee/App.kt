@@ -15,21 +15,21 @@ import io.github.aakira.napier.Napier
 fun App(
     deepLinkParams : DeepLinkParams?,
     onUserLoggedIn : (uid: String) -> Unit
-    // ✅ onShareRequested, onPickImageRequested, onDecodeImageRequested all removed
+    // notificationParams REMOVED — consumed directly in MainScreen via NotificationRouter
 ) {
     val navController = rememberNavController()
     val auth          = remember { Firebase.auth }
 
-    var initialDestination       by remember { mutableStateOf<String?>(null) }
-    var isInitialized            by remember { mutableStateOf(false) }
+    var startDestination         by remember { mutableStateOf<String?>(null) }
+    var isAuthResolved           by remember { mutableStateOf(false) }
     var pendingProfileNavigation by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         ThemePreferencesManager.loadThemeSettings { _, _, _, _ -> }
         auth.authStateChanged.collect { firebaseUser ->
             val sessionLoggedIn = SessionManager.isLoggedIn
-            Napier.d("Auth state → uid=${firebaseUser?.uid}, session=$sessionLoggedIn")
-            initialDestination = when {
+            Napier.d("Auth → uid=${firebaseUser?.uid} session=$sessionLoggedIn")
+            startDestination = when {
                 firebaseUser != null && sessionLoggedIn -> {
                     SessionManager.saveLoginState(true)
                     SessionManager.saveUserData(
@@ -37,12 +37,13 @@ fun App(
                         email  = firebaseUser.email ?: "",
                         name   = SessionManager.savedUserName
                     )
-                    if (SessionManager.isFreshLogin) NavRoutes.ONBOARDING else NavRoutes.MAINSCREEN
+                    if (SessionManager.isFreshLogin) NavRoutes.ONBOARDING
+                    else NavRoutes.MAINSCREEN
                 }
-                firebaseUser == null && sessionLoggedIn && !isInitialized -> NavRoutes.MAINSCREEN
+                firebaseUser == null && sessionLoggedIn && !isAuthResolved -> NavRoutes.MAINSCREEN
                 else -> { SessionManager.clearSession(); NavRoutes.GET_STARTED }
             }
-            isInitialized = true
+            isAuthResolved = true
         }
     }
 
@@ -50,12 +51,13 @@ fun App(
         val referrerId = deepLinkParams?.referrerId
         if (deepLinkParams?.screen == "referral"
             && !referrerId.isNullOrBlank()
-            && referrerId != "null") {
+            && referrerId != "null"
+        ) {
             pendingProfileNavigation = referrerId
         }
     }
 
-    val destination = initialDestination ?: return
+    val destination = startDestination ?: return
 
     AppNavigation(
         navController            = navController,
@@ -63,6 +65,6 @@ fun App(
         pendingProfileNavigation = pendingProfileNavigation,
         onPendingProfileConsumed = { pendingProfileNavigation = null },
         onUserLoggedIn           = onUserLoggedIn
-        // ✅ No share/image lambdas
+        // notificationParams removed from this chain entirely
     )
 }

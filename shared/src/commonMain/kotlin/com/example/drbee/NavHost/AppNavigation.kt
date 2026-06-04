@@ -1,9 +1,7 @@
 package com.example.drbee.NavHost
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -24,6 +22,8 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.delay
 
+// notificationParams parameter REMOVED — MainScreen reads NotificationRouter directly
+
 @Composable
 fun AppNavigation(
     navController            : NavHostController,
@@ -31,15 +31,11 @@ fun AppNavigation(
     pendingProfileNavigation : String?,
     onPendingProfileConsumed : () -> Unit,
     onUserLoggedIn           : (uid: String) -> Unit
-    // ✅ onShareRequested removed — shareReferralLink() is called directly
-    //    inside SearchScreen via the expect/actual fun
 ) {
-    LaunchedEffect(startDestination, pendingProfileNavigation) {
+    LaunchedEffect(pendingProfileNavigation) {
         val target = pendingProfileNavigation ?: return@LaunchedEffect
         delay(300)
-        navController.navigate(NavRoutes.profile(target)) {
-            launchSingleTop = true
-        }
+        navController.navigate(NavRoutes.editprofile(target)) { launchSingleTop = true }
         onPendingProfileConsumed()
     }
 
@@ -52,17 +48,15 @@ fun AppNavigation(
             composable(NavRoutes.GET_STARTED) {
                 GetStartedScreen(
                     onGetStarted = {
-                        navController.navigate(NavRoutes.LOGIN) {
-                            launchSingleTop = true
-                        }
+                        navController.navigate(NavRoutes.LOGIN) { launchSingleTop = true }
                     }
                 )
             }
 
             composable(NavRoutes.LOGIN) {
                 LoginScreen(
-                    navController     = navController,
-                    onLoginSuccess    = {
+                    navController      = navController,
+                    onLoginSuccess     = {
                         val uid = Firebase.auth.currentUser?.uid ?: ""
                         SessionManager.saveUserID(userId = uid)
                         SessionManager.isFreshLogin = true
@@ -74,9 +68,7 @@ fun AppNavigation(
                         }
                     },
                     onNavigateToSignup = {
-                        navController.navigate(NavRoutes.SIGNUP) {
-                            launchSingleTop = true
-                        }
+                        navController.navigate(NavRoutes.SIGNUP) { launchSingleTop = true }
                     }
                 )
             }
@@ -88,9 +80,7 @@ fun AppNavigation(
                 )
             }
 
-            composable(NavRoutes.DASHBOARD) {
-                DashboardScreen()
-            }
+            composable(NavRoutes.DASHBOARD) { DashboardScreen() }
 
             composable(NavRoutes.ONBOARDING) {
                 OnBoardingScreen(
@@ -104,6 +94,7 @@ fun AppNavigation(
                 )
             }
 
+            // MainScreen now reads NotificationRouter itself — no prop needed
             composable(NavRoutes.MAINSCREEN) {
                 MainScreen(
                     navController   = navController,
@@ -113,32 +104,26 @@ fun AppNavigation(
                             launchSingleTop = true
                         }
                     }
-                    // ✅ onShareRequested removed
                 )
             }
 
             composable(
-                route     = NavRoutes.PROFILE,
-                arguments = listOf(
-                    navArgument("userId") {
-                        type         = NavType.StringType
-                        defaultValue = ""
-                    }
-                )
+                route     = NavRoutes.EDIT_PROFILE,
+                arguments = listOf(navArgument("userId") {
+                    type         = NavType.StringType
+                    defaultValue = ""
+                })
             ) { backStackEntry ->
-                // ✅ Read userId directly from backStackEntry arguments — fixes type error
-                val userId by backStackEntry.savedStateHandle.getStateFlow("userId", "")
+                val userId by backStackEntry.savedStateHandle
+                    .getStateFlow("userId", "")
                     .collectAsState()
                 EditProfileProfile(
                     userId = userId,
-                    onBack = { navController.popBackStack() },
-//                    onShareRequested = { id -> onShareRequested(id) },
+                    onBack = { navController.popBackStack() }
                 )
             }
 
-            composable(NavRoutes.PROFILE_SETTING) {
-                profileScreenKMP()
-            }
+            composable(NavRoutes.PROFILE_SETTING) { profileScreenKMP() }
         }
     }
 }
