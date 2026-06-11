@@ -31,7 +31,7 @@ dependencies {
 
     implementation("com.google.auth:google-auth-library-oauth2-http:1.23.0")
 
-
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.uiToolingPreview)
