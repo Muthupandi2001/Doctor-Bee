@@ -22,23 +22,14 @@ import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
 import kotlinx.coroutines.delay
 
-// notificationParams parameter REMOVED — MainScreen reads NotificationRouter directly
-
 @Composable
 fun AppNavigation(
-    navController            : NavHostController,
-    startDestination         : String,
-    pendingProfileNavigation : String?,
-    onPendingProfileConsumed : () -> Unit,
-    onUserLoggedIn           : (uid: String) -> Unit
+    navController             : NavHostController,
+    startDestination          : String,
+    pendingReferrerId         : String?,           // ← replaces pendingProfileNavigation
+    onPendingReferrerConsumed : () -> Unit,        // ← replaces onPendingProfileConsumed
+    onUserLoggedIn            : (uid: String) -> Unit
 ) {
-    LaunchedEffect(pendingProfileNavigation) {
-        val target = pendingProfileNavigation ?: return@LaunchedEffect
-        delay(300)
-        navController.navigate(NavRoutes.editprofile(target)) { launchSingleTop = true }
-        onPendingProfileConsumed()
-    }
-
     WonderBeeTheme(themeType = currentAppThemeSelection) {
         NavHost(
             navController    = navController,
@@ -94,11 +85,13 @@ fun AppNavigation(
                 )
             }
 
-            // MainScreen now reads NotificationRouter itself — no prop needed
+            // ── MainScreen now receives pendingReferrerId to show the popup ──
             composable(NavRoutes.MAINSCREEN) {
                 MainScreen(
-                    navController   = navController,
-                    onLogoutSuccess = {
+                    navController             = navController,
+                    pendingReferrerId         = pendingReferrerId,
+                    onPendingReferrerConsumed = onPendingReferrerConsumed,
+                    onLogoutSuccess           = {
                         navController.navigate(NavRoutes.GET_STARTED) {
                             popUpTo(0) { inclusive = true }
                             launchSingleTop = true

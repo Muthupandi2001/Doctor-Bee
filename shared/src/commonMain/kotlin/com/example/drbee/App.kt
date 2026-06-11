@@ -15,14 +15,16 @@ import io.github.aakira.napier.Napier
 fun App(
     deepLinkParams : DeepLinkParams?,
     onUserLoggedIn : (uid: String) -> Unit
-    // notificationParams REMOVED — consumed directly in MainScreen via NotificationRouter
 ) {
     val navController = rememberNavController()
     val auth          = remember { Firebase.auth }
 
-    var startDestination         by remember { mutableStateOf<String?>(null) }
-    var isAuthResolved           by remember { mutableStateOf(false) }
-    var pendingProfileNavigation by remember { mutableStateOf<String?>(null) }
+    var startDestination    by remember { mutableStateOf<String?>(null) }
+    var isAuthResolved      by remember { mutableStateOf(false) }
+
+    // ── Deep-link referral: store the referrer UID to show as a popup ─────
+    // (replaces the old pendingProfileNavigation that navigated to EditProfile)
+    var pendingReferrerId   by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         ThemePreferencesManager.loadThemeSettings { _, _, _, _ -> }
@@ -47,13 +49,14 @@ fun App(
         }
     }
 
+    // ── Parse deep link — store referrerId; do NOT navigate to EditProfile ─
     LaunchedEffect(deepLinkParams) {
         val referrerId = deepLinkParams?.referrerId
         if (deepLinkParams?.screen == "referral"
             && !referrerId.isNullOrBlank()
             && referrerId != "null"
         ) {
-            pendingProfileNavigation = referrerId
+            pendingReferrerId = referrerId   // ← popup, not navigation
         }
     }
 
@@ -62,9 +65,8 @@ fun App(
     AppNavigation(
         navController            = navController,
         startDestination         = destination,
-        pendingProfileNavigation = pendingProfileNavigation,
-        onPendingProfileConsumed = { pendingProfileNavigation = null },
+        pendingReferrerId        = pendingReferrerId,          // ← new param
+        onPendingReferrerConsumed = { pendingReferrerId = null }, // ← new param
         onUserLoggedIn           = onUserLoggedIn
-        // notificationParams removed from this chain entirely
     )
 }

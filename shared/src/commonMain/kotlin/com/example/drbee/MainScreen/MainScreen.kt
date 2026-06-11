@@ -19,6 +19,7 @@ import com.example.drbee.CommunityScreen.CommunityScreen
 import com.example.drbee.Helper.NotificationEvent
 import com.example.drbee.Helper.NotificationRouter
 import com.example.drbee.ProfileScreen.ProfileScreen
+import com.example.drbee.ProfileScreen.ReferralProfileSheet
 import com.example.drbee.ProfileScreen.WonderBeeTheme
 
 sealed class BottomTab(val route: String) {
@@ -32,14 +33,29 @@ sealed class BottomTab(val route: String) {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MainScreen(
-    navController   : NavController,
-    onLogoutSuccess : () -> Unit
+    navController             : NavController,
+    onLogoutSuccess           : () -> Unit,
+    // ── Deep-link referral popup ──────────────────────────────────────────
+    pendingReferrerId         : String?  = null,
+    onPendingReferrerConsumed : () -> Unit = {}
 ) {
     var selectedTab         by remember { mutableStateOf<BottomTab>(BottomTab.Community) }
     var isChatDetailOpen    by remember { mutableStateOf(false) }
     var targetOtherUserId   by remember { mutableStateOf<String?>(null) }
     var notificationVersion by remember { mutableIntStateOf(0) }
 
+    // ── Referral popup state ──────────────────────────────────────────────
+    // Once MainScreen is composed and a pendingReferrerId arrives, show the sheet.
+    var activeReferrerId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(pendingReferrerId) {
+        if (!pendingReferrerId.isNullOrBlank()) {
+            activeReferrerId = pendingReferrerId
+            onPendingReferrerConsumed()          // clear it upstream so rotation doesn't re-show
+        }
+    }
+
+    // ── Notification routing (unchanged) ─────────────────────────────────
     val routerVersion = NotificationRouter.routerVersion
 
     LaunchedEffect(routerVersion) {
@@ -53,7 +69,7 @@ fun MainScreen(
             is NotificationEvent.OpenCommunity -> {
                 selectedTab = BottomTab.Community
             }
-            null -> { /* already consumed — safe to ignore */ }
+            null -> { /* already consumed */ }
         }
     }
 
@@ -97,6 +113,15 @@ fun MainScreen(
                 )
             }
         }
+    }
+
+    // ── Instagram-style referral profile sheet ────────────────────────────
+    // Rendered outside Scaffold so it overlays everything including the bottom bar.
+    activeReferrerId?.let { referrerId ->
+        ReferralProfileSheet(
+            referrerId = referrerId,
+            onDismiss  = { activeReferrerId = null }
+        )
     }
 }
 

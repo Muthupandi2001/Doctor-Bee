@@ -92,12 +92,28 @@ private class ImagePickerDelegate(
     }
 }
 
+//actual fun shareReferralLink(userId: String) {
+//    val url  = "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
+//    val text = "Hey! Join DrBee: $url"
+//
+//    val controller = UIActivityViewController(
+//        activityItems      = listOf(text),
+//        applicationActivities = null
+//    )
+//
+//    UIApplication.sharedApplication
+//        .keyWindow
+//        ?.rootViewController
+//        ?.presentViewController(controller, animated = true, completion = null)
+//}
+
+
 actual fun shareReferralLink(userId: String) {
-    val url  = "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
+    val url  = "https://gleaming-kringle-ce84e1.netlify.app/?screen=referral&referrerId=$userId"
     val text = "Hey! Join DrBee: $url"
 
     val controller = UIActivityViewController(
-        activityItems      = listOf(text),
+        activityItems        = listOf(text),
         applicationActivities = null
     )
 

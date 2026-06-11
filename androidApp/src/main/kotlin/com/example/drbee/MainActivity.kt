@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
 
         // Handle HTTPS Netlify deep link:
         // https://creative-bunny-e05f99.netlify.app?screen=referral&referrerId=xxx
-        if (uri.scheme == "https" && uri.host == "creative-bunny-e05f99.netlify.app") {
+        if (uri.scheme == "https" && uri.host == "gleaming-kringle-ce84e1.netlify.app") {
             return DeepLinkParams(
                 screen     = uri.getQueryParameter("screen"),
                 referrerId = uri.getQueryParameter("referrerId")

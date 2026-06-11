@@ -20,12 +20,18 @@ fun main() {
         databaseUrl   = "https://doctor-bee-2d622-default-rtdb.firebaseio.com"
     )
 
-    Firebase.initialize(options = webOptions)
+    try {
+        Firebase.initialize(options = webOptions)
+        console.log("Firebase initialized OK")
+    } catch (e: Throwable) {
+        console.error("Firebase init failed: ${e.message}")
+    }
 
     // Parse deep link params from browser URL
     val urlParams  = URLSearchParams(window.location.search)
     val screen     = urlParams.get("screen")
     val referrerId = urlParams.get("referrerId")
+    console.log("DeepLink → screen=$screen referrerId=$referrerId")
 
     val deepLinkParams = if (!screen.isNullOrBlank() || !referrerId.isNullOrBlank()) {
         DeepLinkParams(screen = screen, referrerId = referrerId)
@@ -44,8 +50,9 @@ fun main() {
 }
 
 fun shareReferralLinkWeb(userId: String) {
-    val baseUrl         = "https://creative-bunny-e05f99.netlify.app"
-    val fullReferralUrl = "$baseUrl?screen=referral&referrerId=$userId"
+    // Redirect page — correct, do not change
+    val baseUrl         = "https://gleaming-kringle-ce84e1.netlify.app"
+    val fullReferralUrl = "$baseUrl/?screen=referral&referrerId=$userId"
     val shareText       = "Hey! Join DrBee using my invitation link: $fullReferralUrl"
     val shareTitle      = "Join DrBee App!"
 

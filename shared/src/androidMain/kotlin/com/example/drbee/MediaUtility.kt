@@ -68,10 +68,22 @@ private fun Context.uriToBase64(uri: Uri): String = try {
     original.compress(Bitmap.CompressFormat.JPEG, 65, out)
     Base64.encodeToString(out.toByteArray(), Base64.DEFAULT)
 } catch (e: Exception) { "" }
+//
+//actual fun shareReferralLink(userId: String) {
+//    val activity = ActivityProvider.get()
+//    val url      = "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
+//    val intent   = Intent(Intent.ACTION_SEND).apply {
+//        type     = "text/plain"
+//        putExtra(Intent.EXTRA_SUBJECT, "Join DrBee App!")
+//        putExtra(Intent.EXTRA_TEXT, "Hey! Join DrBee: $url")
+//    }
+//    activity.startActivity(Intent.createChooser(intent, "Share Link Via"))
+//}
+
 
 actual fun shareReferralLink(userId: String) {
     val activity = ActivityProvider.get()
-    val url      = "https://merry-parfait-8fe34a.netlify.app/?screen=referral&referrerId=$userId"
+    val url      = "https://gleaming-kringle-ce84e1.netlify.app/?screen=referral&referrerId=$userId"
     val intent   = Intent(Intent.ACTION_SEND).apply {
         type     = "text/plain"
         putExtra(Intent.EXTRA_SUBJECT, "Join DrBee App!")
